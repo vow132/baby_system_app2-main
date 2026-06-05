@@ -182,24 +182,6 @@
         </view>
       </view>
 
-      <!-- 设备快览 -->
-      <view class="section-card">
-        <view class="section-head">
-          <text class="section-title">我的设备</text>
-          <text class="section-more" @click="goToDevice">管理</text>
-        </view>
-        <view v-if="deviceList.length > 0" class="device-row">
-          <view class="device-item" v-for="device in deviceList.slice(0, 2)" :key="device.id" @click="goToDeviceDetail(device.id)">
-            <view class="device-dot" :class="{ online: device.online_status }" />
-            <text class="device-name">{{ device.device_name }}</text>
-            <text class="device-mode" v-if="device.work_mode">{{ getModeText(device.work_mode) }}</text>
-          </view>
-        </view>
-        <view v-else class="empty-hint" @click="goToOnboarding">
-          <u-icon name="plus-circle" size="36" color="#e0e7ff" />
-          <text class="empty-text">添加第一台设备</text>
-        </view>
-      </view>
     </scroll-view>
 
     <!-- 宝宝选择器 -->
@@ -459,11 +441,6 @@ function formatTime(time: string | null) {
   return new Date(time).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-function getModeText(mode: string | null) {
-  const modeMap: Record<string, string> = { sleep: '睡眠', play: '游戏', co_sleep: '拼床' }
-  return modeMap[mode || ''] || ''
-}
-
 function getRoutineTime(timeSlot: string | null) {
   if (!timeSlot) return '--:--'
   const match = timeSlot.match(/\d{1,2}:\d{2}/)
@@ -532,9 +509,6 @@ function goToContent() { uni.navigateTo({ url: '/pages/content/index' }) }
 function goToMoment() { uni.navigateTo({ url: '/pages/moment/index' }) }
 function goToEvents() { uni.navigateTo({ url: '/pages/monitor/events' }) }
 function goToEventDetail(id: number) { uni.navigateTo({ url: `/pages/monitor/detail?id=${id}` }) }
-function goToDevice() { uni.navigateTo({ url: '/pages/device/list' }) }
-function goToDeviceDetail(id: number) { uni.navigateTo({ url: `/pages/device/detail?id=${id}` }) }
-function goToOnboarding() { uni.navigateTo({ url: '/pages/onboarding/index' }) }
 function goToRoutine() { uni.navigateTo({ url: '/pages/routine/index' }) }
 function goToRoutineAdvice() { uni.navigateTo({ url: '/pages/routine/optimize' }) }
 </script>
@@ -1099,40 +1073,4 @@ function goToRoutineAdvice() { uni.navigateTo({ url: '/pages/routine/optimize' }
   }
 }
 
-// 设备行
-.device-row {
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-
-  .device-item {
-    display: flex;
-    align-items: center;
-    padding: 16rpx 0;
-
-    .device-dot {
-      width: 16rpx;
-      height: 16rpx;
-      border-radius: 50%;
-      background: #ccc;
-      margin-right: 16rpx;
-
-      &.online { background: #4caf50; }
-    }
-
-    .device-name {
-      flex: 1;
-      font-size: 28rpx;
-      color: #333;
-    }
-
-    .device-mode {
-      font-size: 22rpx;
-      color: #667eea;
-      padding: 4rpx 16rpx;
-      background: #eef2ff;
-      border-radius: 20rpx;
-    }
-  }
-}
 </style>
