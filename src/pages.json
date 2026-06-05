@@ -1,0 +1,273 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "首页",
+        "navigationStyle": "custom",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/monitor/index",
+      "style": {
+        "navigationBarTitleText": "看护",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/growth/index",
+      "style": {
+        "navigationBarTitleText": "成长",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/my/index",
+      "style": {
+        "navigationBarTitleText": "我的",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/login/login",
+      "style": {
+        "navigationBarTitleText": "登录",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/login/forgot-password",
+      "style": {
+        "navigationBarTitleText": "找回密码"
+      }
+    },
+    {
+      "path": "pages/ai/index",
+      "style": {
+        "navigationBarTitleText": "AI陪伴"
+      }
+    },
+    {
+      "path": "pages/scene/index",
+      "style": {
+        "navigationBarTitleText": "智能场景"
+      }
+    },
+    {
+      "path": "pages/scene/config",
+      "style": {
+        "navigationBarTitleText": "场景响应配置"
+      }
+    },
+    {
+      "path": "pages/memory/index",
+      "style": {
+        "navigationBarTitleText": "长记忆库"
+      }
+    },
+    {
+      "path": "pages/baby/list",
+      "style": {
+        "navigationBarTitleText": "宝宝管理"
+      }
+    },
+    {
+      "path": "pages/baby/detail",
+      "style": {
+        "navigationBarTitleText": "宝宝详情"
+      }
+    },
+    {
+      "path": "pages/device/list",
+      "style": {
+        "navigationBarTitleText": "设备管理"
+      }
+    },
+    {
+      "path": "pages/device/detail",
+      "style": {
+        "navigationBarTitleText": "设备详情"
+      }
+    },
+    {
+      "path": "pages/device/history",
+      "style": {
+        "navigationBarTitleText": "切换历史"
+      }
+    },
+    {
+      "path": "pages/monitor/events",
+      "style": {
+        "navigationBarTitleText": "事件记录"
+      }
+    },
+    {
+      "path": "pages/monitor/detail",
+      "style": {
+        "navigationBarTitleText": "事件详情"
+      }
+    },
+    {
+      "path": "pages/monitor/alarm",
+      "style": {
+        "navigationBarTitleText": "预警规则"
+      }
+    },
+    {
+      "path": "pages/notification/index",
+      "style": {
+        "navigationBarTitleText": "消息中心"
+      }
+    },
+    {
+      "path": "pages/routine/index",
+      "style": {
+        "navigationBarTitleText": "作息管理"
+      }
+    },
+    {
+      "path": "pages/routine/optimize",
+      "style": {
+        "navigationBarTitleText": "EASY优化"
+      }
+    },
+    {
+      "path": "pages/milestone/index",
+      "style": {
+        "navigationBarTitleText": "成长记录"
+      }
+    },
+    {
+      "path": "pages/milestone/report",
+      "style": {
+        "navigationBarTitleText": "AI成长报告"
+      }
+    },
+    {
+      "path": "pages/milestone/assets",
+      "style": {
+        "navigationBarTitleText": "成长素材"
+      }
+    },
+    {
+      "path": "pages/my/family",
+      "style": {
+        "navigationBarTitleText": "家庭管理"
+      }
+    },
+    {
+      "path": "pages/my/baby-manage",
+      "style": {
+        "navigationBarTitleText": "宝宝管理"
+      }
+    },
+    {
+      "path": "pages/my/settings",
+      "style": {
+        "navigationBarTitleText": "设置"
+      }
+    },
+    {
+      "path": "pages/my/account-security",
+      "style": {
+        "navigationBarTitleText": "账号与安全"
+      }
+    },
+    {
+      "path": "pages/onboarding/index",
+      "style": {
+        "navigationBarTitleText": "开箱引导",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/content/index",
+      "style": {
+        "navigationBarTitleText": "互动内容库"
+      }
+    },
+    {
+      "path": "pages/moment/index",
+      "style": {
+        "navigationBarTitleText": "温馨瞬间"
+      }
+    },
+    {
+      "path": "pages/video/index",
+      "style": {
+        "navigationBarTitleText": "视频回放"
+      }
+    },
+    {
+      "path": "pages/video/player",
+      "style": {
+        "navigationBarTitleText": "视频播放",
+        "navigationBarBackgroundColor": "#000000",
+        "navigationBarTextStyle": "white"
+      }
+    },
+    {
+      "path": "pages/learning/index",
+      "style": {
+        "navigationBarTitleText": "AI学习进度"
+      }
+    },
+    {
+      "path": "pages/growth/sensor-history",
+      "style": {
+        "navigationBarTitleText": "数据记录"
+      }
+    },
+    {
+      "path": "pages/webview/index",
+      "style": {
+        "navigationBarTitleText": "推荐内容"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "智能婴儿床",
+    "navigationBarBackgroundColor": "#ffffff",
+    "backgroundColor": "#f8f8f8"
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#667eea",
+    "borderStyle": "black",
+    "backgroundColor": "#ffffff",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "iconPath": "static/tabbar/home.png",
+        "selectedIconPath": "static/tabbar/home-active.png",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/monitor/index",
+        "iconPath": "static/tabbar/monitor.png",
+        "selectedIconPath": "static/tabbar/monitor-active.png",
+        "text": "看护"
+      },
+      {
+        "pagePath": "pages/growth/index",
+        "iconPath": "static/tabbar/growth.png",
+        "selectedIconPath": "static/tabbar/growth-active.png",
+        "text": "成长"
+      },
+      {
+        "pagePath": "pages/my/index",
+        "iconPath": "static/tabbar/my.png",
+        "selectedIconPath": "static/tabbar/my-active.png",
+        "text": "我的"
+      }
+    ]
+  },
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^u-(.*)": "uview-plus/components/u-$1/u-$1.vue"
+    }
+  }
+}

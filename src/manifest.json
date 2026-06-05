@@ -1,0 +1,38 @@
+{
+  "name": "baby-system-app",
+  "appid": "__UNI__BABYBED",
+  "description": "婴儿床监护系统",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": false,
+      "es6": true,
+      "postcss": true,
+      "minified": true
+    },
+    "usingComponents": true,
+    "permission": {
+      "scope.userLocation": {
+        "desc": "用于获取设备位置信息"
+      }
+    },
+    "requiredPrivateInfos": ["chooseLocation", "getLocation"]
+  },
+  "uniStatistics": {
+    "enable": false
+  },
+  "h5": {
+    "devServer": {
+      "port": 3000,
+      "proxy": {
+        "/api": {
+          "target": "http://223.247.96.246:8123",
+          "changeOrigin": true
+        }
+      }
+    }
+  }
+}
