@@ -5,3 +5,4 @@ unpackage/
 .idea/
 *.log
 .DS_Store
+files_to_copy.txt

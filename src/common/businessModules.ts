@@ -25,13 +25,13 @@ export interface BusinessModule {
 
 export const businessModules: BusinessModule[] = [
   {
-    id: 'dialog',
-    title: '1. 家长对话',
+    id: 'voice',
+    title: '1. 音色管理',
     subtitle: '爸妈端',
-    icon: 'chat-fill',
+    icon: 'mic',
     color: '#667eea',
     bgColor: '#eef2ff',
-    summary: '语音克隆、思考状态、连续对话。',
+    summary: '语音克隆、音色库管理、默认音色切换。',
     submodules: [
       {
         code: '1.1',
@@ -42,25 +42,6 @@ export const businessModules: BusinessModule[] = [
         actions: [
           { label: '音色管理', path: '/pages/ai/index' },
           { label: '语料录入', path: '/pages/onboarding/index' },
-        ],
-      },
-      {
-        code: '1.2',
-        title: '思考状态模拟',
-        desc: 'LLM等待期间展示加载状态、填充词播放状态。',
-        components: '对话加载动画；填充词播放状态',
-        status: '归入AI陪伴对话链路展示',
-        actions: [{ label: 'AI陪伴', path: '/pages/ai/index' }],
-      },
-      {
-        code: '1.3',
-        title: '对话引擎与上下文',
-        desc: '语音唤醒、ASR、长记忆检索、LLM推理、TTS回复。',
-        components: '语音交互主页；对话历史列表；唤醒状态指示',
-        status: '前端承接，ASR/TTS/唤醒依赖后端与硬件',
-        actions: [
-          { label: '语音交互', path: '/pages/ai/index' },
-          { label: '长记忆', path: '/pages/memory/index' },
         ],
       },
     ],

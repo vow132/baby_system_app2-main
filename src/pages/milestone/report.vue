@@ -3,9 +3,9 @@
     <view class="hero">
       <view>
         <text class="hero-title">AI成长报告</text>
-        <text class="hero-desc">每天一句鼓励，每周一份成长总结</text>
+        <text class="hero-desc">每天一句鼓励，按日、周、月沉淀成长总结</text>
       </view>
-      <view class="hero-badge">{{ reportId ? '报告详情' : '本周' }}</view>
+      <view class="hero-badge">{{ reportId ? '报告详情' : activeTypeMeta.label }}</view>
     </view>
 
     <view class="thinking-card" v-if="generating">
@@ -17,24 +17,47 @@
     </view>
 
     <view v-else>
-      <view class="today-card">
-        <view class="today-head">
-          <view>
-            <text class="section-title">今日成长卡片</text>
-            <text class="section-desc">{{ todayText }}</text>
-          </view>
-          <u-icon name="heart-fill" size="24" color="#9b59b6" />
-        </view>
-        <text class="encourage-text">{{ dailyEncouragement }}</text>
-        <view class="today-tags">
-          <text v-for="item in todayTags" :key="item">{{ item }}</text>
+      <view class="type-tabs" v-if="!reportId">
+        <view
+          class="type-tab"
+          v-for="item in reportTypes"
+          :key="item.value"
+          :class="{ active: activeReportType === item.value }"
+          @click="switchReportType(item.value)"
+        >
+          <text>{{ item.label }}</text>
         </view>
       </view>
 
-      <view class="overview-grid">
-        <view class="overview-item" v-for="item in overviewStats" :key="item.label">
-          <text class="overview-value">{{ item.value }}</text>
-          <text class="overview-label">{{ item.label }}</text>
+      <view class="today-card">
+        <view class="today-head">
+          <view>
+            <text class="section-title">{{ currentCardTitle }}</text>
+            <text class="section-desc">{{ reportRange }}</text>
+          </view>
+          <view class="status-badge" :class="{ temporary: isTemporaryReport }">{{ reportStatusText }}</view>
+        </view>
+        <text class="encourage-text">{{ encouragementText }}</text>
+        <view class="today-tags">
+          <text v-for="item in reportTags" :key="item">{{ item }}</text>
+        </view>
+      </view>
+
+      <view class="section">
+        <view class="section-head compact">
+          <view>
+            <text class="section-title">本期事件来源</text>
+            <text class="section-desc">按 {{ activeTypeMeta.label }} 时间段过滤 events.raw_text</text>
+          </view>
+        </view>
+        <view class="event-source-list">
+          <view class="event-source-row" v-for="item in eventStats" :key="item.key">
+            <view class="event-source-main">
+              <view class="event-dot" :style="{ background: item.color }" />
+              <text class="event-label">{{ item.label }}</text>
+            </view>
+            <text class="event-value">{{ item.value }}</text>
+          </view>
         </view>
       </view>
 
@@ -43,8 +66,9 @@
           <view>
             <text class="section-title">AI分析摘要</text>
             <text class="section-desc">{{ reportRange }}</text>
+            <text class="section-note" v-if="!reportId">截至当前时间，不保存到历史报告</text>
           </view>
-          <text class="section-action" v-if="!reportId" @click="generateReport">生成本周报告</text>
+          <text class="section-action" v-if="!reportId" @click="generateReport">{{ generateButtonText }}</text>
         </view>
 
         <view class="analysis-list">
@@ -62,7 +86,7 @@
 
       <view class="section" v-if="suggestions.length">
         <view class="section-head compact">
-          <text class="section-title">下周建议</text>
+          <text class="section-title">{{ nextSuggestionTitle }}</text>
         </view>
         <view class="suggestion-list">
           <view class="suggestion-item" v-for="(item, index) in suggestions" :key="index">
@@ -76,12 +100,12 @@
         <view class="section-head">
           <view>
             <text class="section-title">历史报告</text>
-            <text class="section-desc">生成后的周报会保存到这里</text>
+            <text class="section-desc">这里只展示系统定时生成并保存的{{ activeTypeMeta.label }}</text>
           </view>
         </view>
 
         <view class="report-list" v-if="reports.length > 0">
-          <view class="report-item" v-for="item in reports" :key="item.id" @click="openReport(item.id)">
+          <view class="report-item" v-for="item in reports" :key="getReportKey(item)" @click="openReport(getReportKey(item))">
             <view class="report-main">
               <text class="report-title">{{ getReportTitle(item) }}</text>
               <text class="report-desc">{{ getReportDesc(item) }}</text>
@@ -93,7 +117,7 @@
         <view class="empty-state" v-else>
           <u-icon name="file-text" size="42" color="#d5dbea" />
           <text class="empty-title">暂无历史报告</text>
-          <text class="empty-desc">生成本周报告后，可在这里回看宝宝的成长变化</text>
+          <text class="empty-desc">{{ emptyHistoryText }}</text>
         </view>
       </view>
 
@@ -111,39 +135,69 @@ import { get, post } from '@/api/request'
 import { API } from '@/api/config'
 import { useBabyStore } from '@/stores'
 
+type ReportType = 'daily' | 'weekly' | 'monthly'
+
 const babyStore = useBabyStore()
-const reportId = ref<number | null>(null)
+const reportId = ref<string | null>(null)
+const activeReportType = ref<ReportType>('daily')
 const currentReport = ref<any | null>(null)
 const reports = ref<any[]>([])
 const generating = ref(false)
+const isTemporaryReport = ref(false)
 const fillerText = ref('正在汇总成长事件、互动记录和作息数据')
 
+const reportTypes: { value: ReportType; label: string; rangeLabel: string; nextLabel: string }[] = [
+  { value: 'daily', label: '日报', rangeLabel: '今日', nextLabel: '明日建议' },
+  { value: 'weekly', label: '周报', rangeLabel: '本周', nextLabel: '下周建议' },
+  { value: 'monthly', label: '月报', rangeLabel: '本月', nextLabel: '下月建议' },
+]
+
+const activeTypeMeta = computed(() => reportTypes.find(item => item.value === activeReportType.value) || reportTypes[0])
+
+const activePeriod = computed(() => getPeriodRange(activeReportType.value))
+
 const reportRange = computed(() => {
-  if (!currentReport.value) return '数据积累后会生成更完整的分析'
-  return `${formatDate(currentReport.value.week_start)} - ${formatDate(currentReport.value.week_end)}`
+  if (!currentReport.value) return `${formatDate(activePeriod.value.start)} - ${formatDate(activePeriod.value.end)}`
+  const start = getReportStart(currentReport.value)
+  const end = getReportEnd(currentReport.value)
+  if (start && end) return `${formatDate(start)} - ${formatDate(end)}`
+  if (start) return formatDate(start)
+  return `${activeTypeMeta.value.rangeLabel}成长总结`
 })
 
-const todayText = computed(() => {
-  const now = new Date()
-  return `${now.getMonth() + 1}月${now.getDate()}日`
+const currentCardTitle = computed(() => {
+  if (activeReportType.value === 'daily') return '今日成长卡片'
+  return `${activeTypeMeta.value.rangeLabel}成长总结`
 })
 
-const dailyEncouragement = computed(() => {
+const encouragementText = computed(() => {
   return currentReport.value?.daily_summary
+    || currentReport.value?.encouragement
+    || currentReport.value?.ai_summary
     || currentReport.value?.summary
-    || '今天也在一点点长大，新的记录会帮助我们更懂宝宝。'
+    || `${activeTypeMeta.value.rangeLabel}也在一点点长大，新的记录会帮助我们更懂宝宝。`
 })
 
-const todayTags = computed(() => {
-  if (!currentReport.value) return ['记录积累中', '待生成周报', '成长观察']
-  return ['睡眠', '互动', '里程碑']
+const reportTags = computed(() => {
+  if (!currentReport.value) return ['记录积累中', `待生成${activeTypeMeta.value.label}`, '成长观察']
+  return [activeTypeMeta.value.label, isTemporaryReport.value ? '临时预览' : '已保存', '成长观察']
 })
 
-const overviewStats = computed(() => [
-  { label: '睡眠记录', value: formatStat(currentReport.value?.total_sleep_min != null ? Math.round(currentReport.value.total_sleep_min / 60 * 10) / 10 : null, 'h') },
-  { label: '互动记录', value: formatStat(currentReport.value?.recommendations?.length) },
-  { label: '成长事件', value: formatStat(currentReport.value?.milestones?.length) },
-])
+const reportStatusText = computed(() => {
+  if (!currentReport.value) return '待生成'
+  return isTemporaryReport.value ? '临时预览' : '已保存'
+})
+
+const eventStats = computed(() => {
+  const report = currentReport.value || {}
+  return [
+    { key: 'sleep', label: '睡眠', value: formatEventCount(getEventCount(report, ['sleep_count', 'sleeping_count', 'sleep_events', 'sleep'])), color: '#667eea' },
+    { key: 'cry', label: '哭闹', value: formatEventCount(getEventCount(report, ['cry_count', 'crying_count', 'cry_events', 'cry'])), color: '#f97316' },
+    { key: 'danger', label: '危险', value: formatEventCount(getEventCount(report, ['danger_count', 'danger_events', 'danger'])), color: '#ef4444' },
+    { key: 'play', label: '玩耍', value: formatEventCount(getEventCount(report, ['play_count', 'playing_count', 'play_events', 'playing'])), color: '#10b981' },
+    { key: 'milestone', label: '里程碑', value: formatEventCount(getEventCount(report, ['milestone_count', 'milestones', 'milestone_events'])), color: '#9b59b6' },
+  ]
+})
 
 const suggestions = computed(() => {
   const value = currentReport.value?.suggestions || currentReport.value?.advice || []
@@ -154,10 +208,11 @@ const suggestions = computed(() => {
 
 const analysisCards = computed(() => {
   const highlights = normalizeTextList(currentReport.value?.highlights)
+  const period = activeTypeMeta.value.rangeLabel
   return [
     {
-      title: '本周亮点',
-      desc: highlights[0] || currentReport.value?.summary || '有新的成长记录后，这里会总结宝宝本周的进步。',
+      title: `${period}亮点`,
+      desc: highlights[0] || currentReport.value?.summary || `有新的成长记录后，这里会总结宝宝${period}的进步。`,
       icon: 'star-fill',
       color: '#f59e0b',
     },
@@ -168,7 +223,7 @@ const analysisCards = computed(() => {
       color: '#667eea',
     },
     {
-      title: '下周建议',
+      title: nextSuggestionTitle.value,
       desc: suggestions.value[0] || '数据积累后会给出更贴合宝宝状态的作息和陪伴建议。',
       icon: 'checkmark-circle-fill',
       color: '#10b981',
@@ -176,17 +231,31 @@ const analysisCards = computed(() => {
   ]
 })
 
+const generateButtonText = computed(() => '生成临时总结')
+const nextSuggestionTitle = computed(() => activeTypeMeta.value.nextLabel)
+const emptyHistoryText = computed(() => `系统定时生成${activeTypeMeta.value.label}后，可在这里回看宝宝的成长变化`)
+
 const fillerPhrases = [
   '正在汇总成长事件、互动记录和作息数据',
-  '正在整理宝宝这一周的亮点',
+  '正在整理宝宝当前周期的亮点',
   '正在匹配鼓励式报告模板',
   '正在生成适合家长阅读的总结',
 ]
 
 onLoad((options) => {
-  if (options?.id) reportId.value = Number(options.id)
+  if (options?.id) reportId.value = String(options.id)
+  if (isReportType(options?.type)) activeReportType.value = options.type
   loadData()
 })
+
+function switchReportType(type: ReportType) {
+  if (activeReportType.value === type || generating.value) return
+  activeReportType.value = type
+  currentReport.value = null
+  isTemporaryReport.value = false
+  reports.value = []
+  loadData()
+}
 
 async function generateReport() {
   if (!babyStore.currentBaby) await babyStore.fetchBabyList()
@@ -200,32 +269,51 @@ async function generateReport() {
   }, 1600)
 
   try {
-    await post(API.MILESTONE.REPORT_GENERATE, { baby_id: babyStore.currentBaby.id }, { showError: false })
-    uni.showToast({ title: '报告已生成', icon: 'success' })
+    const period = activePeriod.value
+    const res = await post(API.MILESTONE.REPORT_GENERATE, {
+      baby_id: babyStore.currentBaby.id,
+      report_type: activeReportType.value,
+      period_start: toDateParam(period.start),
+      period_end: toDateParam(period.end),
+      temporary: true,
+      save: false,
+    }, { showError: false })
+    if (res.code === 0 && res.data) {
+      currentReport.value = res.data
+      isTemporaryReport.value = true
+      uni.showToast({ title: '已生成临时预览', icon: 'success' })
+    } else {
+      uni.showToast({ title: '已提交生成任务', icon: 'none' })
+    }
   } catch {
     await new Promise(resolve => setTimeout(resolve, 1800))
     uni.showToast({ title: '已提交生成任务', icon: 'none' })
   } finally {
     clearInterval(timer)
     generating.value = false
-    await loadData()
   }
 }
 
 async function loadData() {
   if (reportId.value) {
-    const res = await get(API.MILESTONE.REPORT_DETAIL(reportId.value), undefined, { showError: false })
-    if (res.code === 0 && res.data) currentReport.value = res.data
+    const res = await get(`/milestone/report/${encodeURIComponent(reportId.value)}`, undefined, { showError: false })
+    if (res.code === 0 && res.data) {
+      currentReport.value = res.data
+      isTemporaryReport.value = false
+      const type = normalizeReportType(res.data.report_type)
+      if (type) activeReportType.value = type
+    }
     return
   }
 
   if (!babyStore.currentBaby) await babyStore.fetchBabyList()
   if (!babyStore.currentBaby) return
 
-  const res = await get(`${API.MILESTONE.REPORT_LIST}?baby_id=${babyStore.currentBaby.id}&page=1&page_size=20`, undefined, { showError: false })
+  const res = await get(`${API.MILESTONE.REPORT_LIST}?baby_id=${babyStore.currentBaby.id}&report_type=${activeReportType.value}&page=1&page_size=20`, undefined, { showError: false })
   if (res.code === 0 && res.data?.items) {
-    reports.value = res.data.items
+    reports.value = filterReportsByType(res.data.items)
     currentReport.value = reports.value[0] || null
+    isTemporaryReport.value = false
   }
 }
 
@@ -236,8 +324,13 @@ function normalizeTextList(value: any) {
 }
 
 function formatStat(value: any, unit = '') {
-  if (value === undefined || value === null || value === '') return '待积累'
+  if (value === undefined || value === null || value === '') return '暂无'
   return `${value}${unit}`
+}
+
+function formatEventCount(value: any) {
+  if (value === undefined || value === null || value === '') return '暂无'
+  return `${value}条`
 }
 
 function formatDate(date: string | null | undefined) {
@@ -249,20 +342,99 @@ function formatDate(date: string | null | undefined) {
 
 function getReportTitle(item: any) {
   if (item.title) return item.title
-  if (item.week_start || item.week_end) return `${formatDate(item.week_start)} - ${formatDate(item.week_end)} 成长周报`
-  return '成长周报'
+  const type = normalizeReportType(item.report_type) || activeReportType.value
+  const meta = reportTypes.find(reportType => reportType.value === type) || activeTypeMeta.value
+  const start = getReportStart(item)
+  const end = getReportEnd(item)
+  if (start && end) return `${formatDate(start)} - ${formatDate(end)} 成长${meta.label}`
+  if (start) return `${formatDate(start)} 成长${meta.label}`
+  return `成长${meta.label}`
 }
 
 function getReportDesc(item: any) {
-  return item.summary || item.ai_summary || '记录宝宝近期状态变化和成长亮点'
+  return item.summary || item.ai_summary || item.daily_summary || '记录宝宝近期状态变化和成长亮点'
 }
 
-function openReport(id: number) {
-  uni.navigateTo({ url: `/pages/milestone/report?id=${id}` })
+function getReportKey(item: any) {
+  return String(item.id || item.report_id || '')
+}
+
+function openReport(id: string) {
+  if (!id) return
+  uni.navigateTo({ url: `/pages/milestone/report?id=${id}&type=${activeReportType.value}` })
 }
 
 function goBack() {
   uni.navigateBack()
+}
+
+function getEventCount(report: any, keys: string[]) {
+  const direct = getCount(report, keys)
+  if (direct != null) return direct
+  const stats = report.event_stats || report.stats || report.event_counts || {}
+  return getCount(stats, keys)
+}
+
+function getCount(report: any, keys: string[]) {
+  if (!report) return null
+  for (const key of keys) {
+    const value = report[key]
+    if (Array.isArray(value)) return value.length
+    if (typeof value === 'number') return value
+  }
+  return null
+}
+
+function getReportStart(report: any) {
+  return report.report_date || report.period_start || report.week_start || report.month_start || report.start_date
+}
+
+function getReportEnd(report: any) {
+  return report.period_end || report.week_end || report.month_end || report.end_date
+}
+
+function getPeriodRange(type: ReportType) {
+  const now = new Date()
+  const start = new Date(now)
+
+  if (type === 'daily') {
+    start.setHours(0, 0, 0, 0)
+  } else if (type === 'weekly') {
+    const day = start.getDay() || 7
+    start.setDate(start.getDate() - day + 1)
+    start.setHours(0, 0, 0, 0)
+  } else {
+    start.setDate(1)
+    start.setHours(0, 0, 0, 0)
+  }
+
+  return { start, end: now }
+}
+
+function toDateParam(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function isReportType(value: any): value is ReportType {
+  return value === 'daily' || value === 'weekly' || value === 'monthly'
+}
+
+function normalizeReportType(value: any): ReportType | null {
+  if (isReportType(value)) return value
+  if (value === 'day' || value === '日报') return 'daily'
+  if (value === 'week' || value === '周报') return 'weekly'
+  if (value === 'month' || value === '月报') return 'monthly'
+  return null
+}
+
+function filterReportsByType(items: any[]) {
+  return items.filter(item => {
+    const type = normalizeReportType(item.report_type)
+    return !type || type === activeReportType.value
+  })
 }
 </script>
 
@@ -316,6 +488,34 @@ function goBack() {
   background: #fff;
   border-radius: 24rpx;
   box-shadow: 0 12rpx 32rpx rgba(28, 35, 53, 0.05);
+}
+
+.type-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8rpx;
+  padding: 8rpx;
+  margin-bottom: 22rpx;
+  background: #fff;
+  border-radius: 22rpx;
+  box-shadow: 0 10rpx 28rpx rgba(28, 35, 53, 0.04);
+}
+
+.type-tab {
+  height: 68rpx;
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #667085;
+  font-size: 26rpx;
+  font-weight: 800;
+}
+
+.type-tab.active {
+  color: #fff;
+  background: linear-gradient(135deg, #9b59b6, #667eea);
+  box-shadow: 0 10rpx 22rpx rgba(102, 126, 234, 0.2);
 }
 
 .thinking-card {
@@ -391,6 +591,14 @@ function goBack() {
   line-height: 1.45;
 }
 
+.section-note {
+  display: block;
+  color: #b45309;
+  font-size: 22rpx;
+  line-height: 1.45;
+  margin-top: 8rpx;
+}
+
 .section-action {
   color: #667eea;
   font-size: 25rpx;
@@ -420,33 +628,63 @@ function goBack() {
   font-size: 22rpx;
 }
 
-.overview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14rpx;
-  margin-bottom: 24rpx;
+.status-badge {
+  flex-shrink: 0;
+  color: #667eea;
+  background: #eef2ff;
+  border-radius: 999rpx;
+  padding: 9rpx 16rpx;
+  font-size: 22rpx;
+  font-weight: 800;
 }
 
-.overview-item {
-  min-height: 126rpx;
-  padding: 20rpx 10rpx;
-  text-align: center;
+.status-badge.temporary {
+  color: #b45309;
+  background: #fff7ed;
+}
+
+.event-source-list {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: 14rpx;
 }
 
-.overview-value {
-  color: #667eea;
-  font-size: 30rpx;
-  font-weight: 900;
-  line-height: 1.2;
+.event-source-row {
+  min-height: 58rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  background: #f8f9fd;
+  border-radius: 18rpx;
+  padding: 12rpx 18rpx;
 }
 
-.overview-label {
+.event-source-main {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+}
+
+.event-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.event-label {
+  color: #252b3a;
+  font-size: 25rpx;
+  font-weight: 800;
+}
+
+.event-value {
   color: #98a2b3;
-  font-size: 22rpx;
-  margin-top: 8rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .analysis-list,

@@ -35,15 +35,15 @@
         <u-icon name="arrow-right" size="18" color="#cbd5e1" />
       </view>
 
-      <!-- AI陪伴（核心入口） -->
+      <!-- 音色管理 -->
       <view class="ai-card" @click="goToAI">
         <view class="ai-left">
           <view class="ai-icon">
             <u-icon name="mic-fill" size="28" color="#fff" />
           </view>
           <view class="ai-text">
-            <text class="ai-title">AI语音陪伴</text>
-            <text class="ai-desc">录制家人声音，AI学你说话陪伴宝宝</text>
+            <text class="ai-title">音色管理</text>
+            <text class="ai-desc">管理家人音色库，切换默认音色</text>
           </view>
         </view>
         <u-icon name="arrow-right" size="18" color="#c4b5fd" />

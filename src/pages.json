@@ -45,7 +45,7 @@
     {
       "path": "pages/ai/index",
       "style": {
-        "navigationBarTitleText": "AI陪伴"
+        "navigationBarTitleText": "音色管理"
       }
     },
     {

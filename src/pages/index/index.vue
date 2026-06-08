@@ -71,12 +71,6 @@
 
       <!-- 快捷操作 -->
       <view class="quick-actions">
-        <view class="action-item" @click="goToAI">
-          <view class="action-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">
-            <u-icon name="mic-fill" size="24" color="#fff" />
-          </view>
-          <text class="action-label">语音安抚</text>
-        </view>
         <view class="action-item" @click="goToReport">
           <view class="action-icon" style="background: linear-gradient(135deg, #ff9900, #f5a623);">
             <u-icon name="file-text-fill" size="24" color="#fff" />
@@ -94,6 +88,12 @@
             <u-icon name="camera-fill" size="24" color="#fff" />
           </view>
           <text class="action-label">温馨瞬间</text>
+        </view>
+        <view class="action-item" @click="goToAI">
+          <view class="action-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+            <u-icon name="mic-fill" size="24" color="#fff" />
+          </view>
+          <text class="action-label">AI陪伴</text>
         </view>
       </view>
 
@@ -503,7 +503,6 @@ function selectBaby(baby: BabyInfo) {
 // 导航
 function goToMy() { uni.switchTab({ url: '/pages/my/index' }) }
 function goToNotifications() { uni.navigateTo({ url: '/pages/notification/index' }) }
-function goToAI() { uni.navigateTo({ url: '/pages/ai/index' }) }
 function goToReport() { uni.navigateTo({ url: '/pages/milestone/report' }) }
 function goToContent() { uni.navigateTo({ url: '/pages/content/index' }) }
 function goToMoment() { uni.navigateTo({ url: '/pages/moment/index' }) }
@@ -511,6 +510,7 @@ function goToEvents() { uni.navigateTo({ url: '/pages/monitor/events' }) }
 function goToEventDetail(id: number) { uni.navigateTo({ url: `/pages/monitor/detail?id=${id}` }) }
 function goToRoutine() { uni.navigateTo({ url: '/pages/routine/index' }) }
 function goToRoutineAdvice() { uni.navigateTo({ url: '/pages/routine/optimize' }) }
+function goToAI() { uni.navigateTo({ url: '/pages/ai/index' }) }
 </script>
 
 <style lang="scss" scoped>

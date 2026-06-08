@@ -327,7 +327,7 @@
           </view>
         </view>
 
-        <u-button type="primary" text="提交训练" :loading="training" :disabled="!voiceForm.voice_name || !audioFilePath" @click="submitVoiceClone" block />
+        <u-button type="primary" text="提交训练" :loading="training" @click="submitVoiceClone" block />
       </view>
 
       <view class="tip-card">
