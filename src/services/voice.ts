@@ -23,6 +23,8 @@ import {
   setDefaultVoice,
   trainVoiceClone,
   deleteVoiceClip,
+  getVoices,
+  deleteVoice,
   type VoiceCloneInfo,
   type ChatMessage,
   type VoiceSession,
@@ -212,12 +214,12 @@ export async function saveMemory(babyId: number, content: string, tags?: string[
 // ========== 音色库管理 ==========
 
 /**
- * 获取音色库列表
+ * 获取音色库列表（外部接口）
  */
-export async function getVoiceLibrary(babyId: number): Promise<VoiceCloneInfo[]> {
-  const res = await getCloneVoices(babyId)
+export async function getVoiceLibrary(): Promise<any[]> {
+  const res = await getVoices()
   if (res.code !== 0) throw new Error(res.message || '获取音色列表失败')
-  return res.data
+  return res.data || []
 }
 
 /**
@@ -238,10 +240,11 @@ export async function trainNewVoice(data: { baby_id: number; voice_role: string;
 }
 
 /**
- * 删除音色
+ * 删除音色（外部接口）
+ * @param voiceUri 音色URI，如 "speech:star:xxx:0da77d14"
  */
-export async function removeVoice(clipId: number): Promise<void> {
-  const res = await deleteVoiceClip(clipId)
+export async function removeVoice(voiceUri: string): Promise<void> {
+  const res = await deleteVoice(voiceUri)
   if (res.code !== 0) throw new Error(res.message || '删除音色失败')
 }
 

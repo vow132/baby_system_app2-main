@@ -8,7 +8,7 @@
         <text class="baby-name">{{ babyName }}</text>
         <text class="baby-age">{{ selectedAge }}个月 · {{ currentTemplate.title }}</text>
       </view>
-      <view class="hero-tag">{{ currentGoal.label }}</view>
+      <view class="hero-tag">EASY作息</view>
     </view>
 
     <view class="section">
@@ -32,27 +32,6 @@
           </view>
         </view>
       </scroll-view>
-    </view>
-
-    <view class="section">
-      <view class="section-head">
-        <view>
-          <text class="section-title">作息目标</text>
-          <text class="section-desc">选择后生成更贴合当天的EASY日程</text>
-        </view>
-      </view>
-      <view class="goal-grid">
-        <view
-          class="goal-card"
-          v-for="goal in goals"
-          :key="goal.value"
-          :class="{ active: goal.value === selectedGoal }"
-          @click="selectedGoal = goal.value"
-        >
-          <u-icon :name="goal.icon" size="24" :color="goal.value === selectedGoal ? '#fff' : goal.color" />
-          <text>{{ goal.label }}</text>
-        </view>
-      </view>
     </view>
 
     <view class="generate-card">
@@ -143,19 +122,11 @@ interface AgeTemplate {
 
 const babyStore = useBabyStore()
 const selectedAge = ref(11)
-const selectedGoal = ref('balanced')
 const selectedTemplateKey = ref('7-12')
 const generatedSchedule = ref<ScheduleItem[]>([])
 const backendSchedule = ref<ScheduleItem[]>([])
 const generating = ref(false)
 const scheduleSource = ref('默认展示月龄标准模板，可点击生成今日计划')
-
-const goals = [
-  { value: 'balanced', label: '规律作息', icon: 'calendar-fill', color: '#5677fc' },
-  { value: 'sleep', label: '睡眠优先', icon: 'moon', color: '#667eea' },
-  { value: 'feeding', label: '喂养提醒', icon: 'heart-fill', color: '#19be6b' },
-  { value: 'activity', label: '活动发展', icon: 'star-fill', color: '#ff9900' },
-]
 
 const ageTemplates: AgeTemplate[] = [
   {
@@ -253,7 +224,6 @@ const ageTemplates: AgeTemplate[] = [
 ]
 
 const currentTemplate = computed(() => ageTemplates.find(item => item.key === selectedTemplateKey.value) || ageTemplates[2])
-const currentGoal = computed(() => goals.find(item => item.value === selectedGoal.value) || goals[0])
 const babyName = computed(() => babyStore.currentBaby?.name || '小宝贝')
 const displaySchedule = computed(() => generatedSchedule.value.length ? generatedSchedule.value : backendSchedule.value.length ? backendSchedule.value : currentTemplate.value.schedule)
 const nextReminders = computed(() => displaySchedule.value.slice(0, 4))
@@ -321,7 +291,6 @@ async function generateEasyPlan() {
     const res = await post(API.ROUTINE.EASY_OPTIMIZE, {
       baby_id: babyStore.currentBaby.id,
       age_month: selectedAge.value,
-      goal: selectedGoal.value,
       analysis_days: 7,
     })
     const optimized = (res.code === 0 && res.data?.optimized_routines) ? res.data.optimized_routines : []
@@ -330,7 +299,7 @@ async function generateEasyPlan() {
         item.time_slot?.slice(0, 5) || '--:--',
         item.activity_name || item.template_name || 'EASY节点',
         normalizeType(item.activity_type),
-        item.description || `${currentGoal.value.label}目标下的AI优化节点`,
+        item.description || 'AI优化节点',
         item.reminder_enabled ? `提前${item.reminder_before_min || 10}分钟提醒` : '节点提醒'
       ))
       scheduleSource.value = '已结合历史行为生成AI优化日程'
@@ -530,29 +499,6 @@ function getTypeIcon(type: ScheduleItem['type']) {
   color: #94a3b8;
   line-height: 1.35;
   margin-top: 8rpx;
-}
-
-.goal-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16rpx;
-}
-
-.goal-card {
-  height: 84rpx;
-  border-radius: 18rpx;
-  background: #f8fafc;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10rpx;
-  color: #475569;
-  font-size: 26rpx;
-}
-
-.goal-card.active {
-  background: linear-gradient(135deg, #ff9900, #f5a623);
-  color: #fff;
 }
 
 .generate-card {

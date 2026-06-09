@@ -144,8 +144,9 @@ export const API = {
     WEEKLY_REPORT_GENERATE: '/milestone/weekly-report/generate',   // POST AI生成每日展板形式周报
   },
 
-  // ========== 语音模块（18个，全部小程序接口） ==========
+  // ========== 语音模块（全部小程序接口） ==========
   VOICE: {
+    // 内部接口
     CLONE: '/voice/clone',                     // POST 上传音频训练克隆专属音色
     CLIPS: '/voice/clips',                     // GET 查询已克隆音色列表
     SWITCH: '/voice/switch',                   // POST 切换当前使用AI音色
@@ -153,7 +154,7 @@ export const API = {
     TTS: '/voice/tts',                         // POST 文字转换语音输出
     CHAT: '/voice/chat',                       // POST 和AI进行自然语言对话
     HISTORY: '/voice/history',                 // GET 分页查询历史对话记录
-    DELETE_CLIP: (clip_id: number) => `/voice/clip/${clip_id}`,   // DELETE 删除某个克隆音色
+    DELETE_CLIP: (clip_id: number) => `/voice/clip/${clip_id}`,   // DELETE 删除某个克隆音色（旧）
     WAKE: '/voice/wake',                       // POST 语音唤醒词检测
     INTENT: '/voice/intent',                   // POST 语音指令意图识别
     COMMAND: '/voice/command',                 // POST 执行语音指令控制
@@ -162,8 +163,14 @@ export const API = {
     SESSION_CREATE: '/voice/session',          // POST 创建新的对话会话
     SESSION_CLOSE: (session_id: string) => `/voice/session/${session_id}/close`,  // POST 关闭指定对话会话
     CLONE_TRAIN: '/voice/clone/train',         // POST 训练语音克隆模型
-    CLONE_VOICES: '/voice/clone/voices',       // GET 获取音色库列表
+    CLONE_VOICES: '/voice/clone/voices',       // GET 获取音色库列表（旧）
     CLONE_VOICE_DEFAULT: (voice_id: string) => `/voice/clone/voices/${voice_id}/default`, // PUT 设置默认音色
+    // 外部语音接口
+    EXT_GET_VOICES: '/v1/audio/get_voices',                // GET 获取音色列表
+    EXT_DELETE_VOICE: '/v1/audio/delete_voice',            // DELETE 删除音色（参数：voice_uri）
+    EXT_CLONE_VOICE: '/v1/audio/clone_voice',              // POST 克隆音色
+    EXT_GENERATE_SPEECH: '/v1/audio/generate_speech',      // POST 语音合成
+    EXT_SPEECH_TO_TEXT: '/speech-to-text',                  // POST 语音识别
   },
 
   // ========== 温馨瞬间模块（4个，全部小程序接口） ==========

@@ -117,7 +117,7 @@
           <u-icon name="calendar" size="24" color="#8aa2ff" />
           <view class="compact-empty-main">
             <text class="compact-empty-title">还没有今日作息</text>
-            <text class="compact-empty-desc">选择月龄和目标后，可生成今天的 EASY 日程</text>
+            <text class="compact-empty-desc">选择月龄后，可生成今天的 EASY 日程</text>
           </view>
           <u-icon name="arrow-right" size="16" color="#cbd5e1" />
         </view>
@@ -270,7 +270,7 @@ const routineAdviceDesc = computed(() => {
   if (routineSuggestions.value.length > 1) return routineSuggestions.value[1]
   if (routineSuggestions.value.length === 1) return '查看完整建议后，可决定是否调整下一段 EASY 日程'
   if (routineItems.value.length) return '系统会结合睡眠、喂养和安抚记录持续给出建议'
-  return '先选择月龄和作息目标，首页会同步显示下一步提醒'
+  return '先选择月龄，首页会同步显示下一步提醒'
 })
 
 let refreshTimer: number | null = null

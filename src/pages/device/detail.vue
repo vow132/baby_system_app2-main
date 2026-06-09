@@ -43,7 +43,7 @@
         <view class="action-item" @click="handleReboot"><u-icon name="reload" size="40" color="#ff9900" /><text>远程重启</text></view>
         <view class="action-item" @click="showRenamePopup = true"><u-icon name="edit-pen" size="40" color="#5677fc" /><text>设备改名</text></view>
         <view class="action-item" @click="unbindCurrentDevice"><u-icon name="minus-circle" size="40" color="#fa3534" /><text>解绑设备</text></view>
-        <view class="action-item" @click="deactivateDevice"><u-icon name="close-circle" size="40" color="#fa3534" /><text>删除设备（注销）</text></view>
+        <view class="action-item" @click="deactivateDevice"><u-icon name="close-circle" size="40" color="#fa3534" /><text>删除设备</text></view>
       </view>
     </view>
 
@@ -113,28 +113,33 @@ onLoad(async (options) => {
 
 async function loadDevice() {
   await Promise.allSettled([babyStore.fetchBabyList()])
-  const [statusRes, firmwareRes, batteryRes, listRes] = await Promise.allSettled([
+
+  // 直接调用 getDeviceStatus 获取设备信息（后端已支持未绑定设备）
+  const [statusRes, listRes, firmwareRes, batteryRes] = await Promise.allSettled([
     getDeviceStatus(deviceSn.value),
+    getDeviceList(),
     getFirmwareVersion(deviceSn.value),
     getDeviceBattery(deviceSn.value),
-    getDeviceList(),
   ])
+
   if (statusRes.status === 'fulfilled' && isSuccessCode(statusRes.value.code)) {
     device.value = statusRes.value.data as DeviceInfo
     renameValue.value = getDeviceDisplayName(deviceSn.value, device.value?.device_name)
   }
-  if (firmwareRes.status === 'fulfilled' && isSuccessCode(firmwareRes.value.code)) firmware.value = firmwareRes.value.data
-  if (batteryRes.status === 'fulfilled' && isSuccessCode(batteryRes.value.code)) battery.value = batteryRes.value.data
+
   if (listRes.status === 'fulfilled' && isSuccessCode(listRes.value.code) && Array.isArray(listRes.value.data)) {
     deviceList.value = listRes.value.data
-    const listDevice = listRes.value.data.find((item) => item.device_sn === deviceSn.value)
+    // 如果 getDeviceStatus 没返回 baby_id，从列表中补充
+    const listDevice = listRes.value.data.find((item: DeviceInfo) => item.device_sn === deviceSn.value)
     if (listDevice && device.value) {
-      device.value = { ...listDevice, ...device.value, baby_id: listDevice.baby_id }
-    } else if (listDevice && !device.value) {
-      device.value = listDevice
-      renameValue.value = getDeviceDisplayName(deviceSn.value, listDevice.device_name)
+      device.value = { ...device.value, baby_id: listDevice.baby_id }
     }
   }
+
+  if (firmwareRes.status === 'fulfilled' && isSuccessCode(firmwareRes.value.code)) firmware.value = firmwareRes.value.data
+  if (batteryRes.status === 'fulfilled' && isSuccessCode(batteryRes.value.code)) battery.value = batteryRes.value.data
+
+  // 如果还是没有设备信息，尝试从本地缓存获取
   if (!device.value) {
     const localDevice = getLocalRegisteredDevices().find((item) => item.device_sn === deviceSn.value)
     if (localDevice) {
@@ -256,23 +261,26 @@ function unbindCurrentDevice() {
 }
 
 function deactivateDevice() {
-  if (currentBoundBabyId.value) {
-    uni.showToast({ title: '请解绑后注销', icon: 'none' })
-    return
-  }
   uni.showModal({
-    title: '删除设备（注销）',
-    content: '注销后此设备将从设备列表中移除，确认继续？',
+    title: '删除设备',
+    content: currentBoundBabyId.value
+      ? '当前设备已绑定宝宝，请先解绑后再删除'
+      : '确认删除该设备的话将清除所有绑定过的数据',
     success: async (modalRes) => {
       if (!modalRes.confirm) return
+      // 如果设备已绑定，提示先解绑
+      if (currentBoundBabyId.value) {
+        uni.showToast({ title: '请先解绑设备后再删除', icon: 'none' })
+        return
+      }
       const res = await deleteDevice(deviceSn.value)
       if (!isSuccessCode(res.code)) {
-        uni.showToast({ title: res.message || '注销失败', icon: 'none' })
+        uni.showToast({ title: res.message || '删除失败', icon: 'none' })
         return
       }
       markDeviceRemoved(deviceSn.value)
       removeLocalRegisteredDevice(deviceSn.value)
-      uni.showToast({ title: '注销成功', icon: 'success' })
+      uni.showToast({ title: '设备已删除', icon: 'success' })
       setTimeout(() => uni.navigateBack(), 500)
     },
   })

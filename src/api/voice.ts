@@ -29,6 +29,7 @@ export interface VoiceClip {
 
 // 音色库信息（对齐后端 VoiceInfo）
 export interface VoiceCloneInfo {
+  id: number | null
   voice_id: string
   voice_role: string
   voice_name: string
@@ -293,4 +294,30 @@ export function setDefaultVoice(voiceId: string) {
     voice_id: voiceId,
     switch_delay_ms: 150,
   })
+}
+
+// ========== 外部语音接口 ==========
+
+/**
+ * 获取音色列表（外部接口）
+ * GET /v1/audio/get_voices
+ */
+export function getVoices() {
+  return get<any[]>(API.VOICE.EXT_GET_VOICES)
+}
+
+/**
+ * 删除音色（外部接口）
+ * DELETE /v1/audio/delete_voice?voice_uri=xxx
+ */
+export function deleteVoice(voiceUri: string) {
+  return del(`${API.VOICE.EXT_DELETE_VOICE}?voice_uri=${encodeURIComponent(voiceUri)}`)
+}
+
+/**
+ * 克隆音色（外部接口）
+ * POST /v1/audio/clone_voice
+ */
+export function cloneVoiceExternal(data: { customName: string; text: string; file: any }) {
+  return post<any>(API.VOICE.EXT_CLONE_VOICE, data)
 }
