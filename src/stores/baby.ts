@@ -31,6 +31,8 @@ export const useBabyStore = defineStore('baby', () => {
         currentBaby.value = null
       }
       persistBabyCache()
+    } else {
+      clearBabyCache()
     }
     return res
   }

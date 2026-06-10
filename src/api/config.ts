@@ -182,6 +182,10 @@ export const API = {
     CLONE_TRAIN: '/voice/clone/train',         // POST 训练语音克隆模型
     CLONE_VOICES: '/voice/clone/voices',       // GET 获取音色库列表（旧）
     CLONE_VOICE_DEFAULT: (voice_id: string) => `/voice/clone/voices/${voice_id}/default`, // PUT 设置默认音色
+    // 新增音色库接口（后端统一管理）
+    LIBRARY_UPLOAD: '/voice/library/upload',   // POST 克隆音色（文件上传方式）
+    LIBRARY: '/voice/library',                 // GET 获取音色库列表
+    LIBRARY_DELETE: (voice_name: string) => `/voice/library/by-name/${voice_name}`, // DELETE 根据音色名称删除
     // 外部语音接口（注意：BASE_URL 已包含 /api/v1，所以这里不需要 /v1 前缀）
     EXT_GET_VOICES: '/audio/get_voices',                // GET 获取音色列表
     EXT_DELETE_VOICE: '/audio/delete_voice',            // DELETE 删除音色（参数：voice_uri）

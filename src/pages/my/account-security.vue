@@ -150,11 +150,12 @@
 <script setup lang="ts">
 import { computed, reactive, ref, onUnmounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { useFamilyStore, useUserStore } from '@/stores'
+import { useBabyStore, useFamilyStore, useUserStore } from '@/stores'
 import { bindPhone, cancelAccount, changePassword, changePhone, sendSmsCode } from '@/api/auth'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
+const babyStore = useBabyStore()
 const loading = ref(false)
 const passwordPanelVisible = ref(false)
 const phonePanelVisible = ref(false)
@@ -184,8 +185,12 @@ const cancelForm = reactive({
 const hasBoundPhone = computed(() => !!userStore.userInfo?.phone)
 const maskedCurrentPhone = computed(() => maskPhone(userStore.userInfo?.phone || ''))
 
-function isValidPhone(phone: string) {
-  return /^1\d{10}$/.test(phone)
+function normalizePhone(phone: unknown) {
+  return String(phone ?? '').replace(/\D/g, '').slice(0, 11)
+}
+
+function isValidPhone(phone: unknown) {
+  return /^1\d{10}$/.test(normalizePhone(phone))
 }
 
 function maskPhone(phone: string) {
@@ -297,7 +302,9 @@ async function sendCurrentPhoneCode() {
 }
 
 async function sendNewPhoneCode() {
-  if (!isValidPhone(phoneForm.phone)) {
+  const phone = normalizePhone(phoneForm.phone)
+  phoneForm.phone = phone
+  if (!isValidPhone(phone)) {
     uni.showToast({ title: '请输入正确的手机号', icon: 'none' })
     return
   }
@@ -306,7 +313,7 @@ async function sendNewPhoneCode() {
   loading.value = true
   try {
     const res = await sendSmsCode({
-      phone: phoneForm.phone,
+      phone,
       scene: hasBoundPhone.value ? 'change_phone_new' : 'bind_phone',
     })
     if (res.code === 0) {
@@ -325,7 +332,9 @@ async function handleBindPhone() {
     uni.showToast({ title: '请输入当前手机号验证码', icon: 'none' })
     return
   }
-  if (!isValidPhone(phoneForm.phone)) {
+  const phone = normalizePhone(phoneForm.phone)
+  phoneForm.phone = phone
+  if (!isValidPhone(phone)) {
     uni.showToast({ title: '请输入正确的手机号', icon: 'none' })
     return
   }
@@ -339,10 +348,10 @@ async function handleBindPhone() {
     const res = hasBoundPhone.value
       ? await changePhone({
           old_phone_code: phoneForm.oldCode,
-          new_phone: phoneForm.phone,
+          new_phone: phone,
           new_phone_code: phoneForm.code,
         })
-      : await bindPhone({ phone: phoneForm.phone, code: phoneForm.code })
+      : await bindPhone({ phone, code: phoneForm.code })
     if (res.code === 0) {
       await userStore.fetchUserInfo()
       uni.showToast({ title: hasBoundPhone.value ? '手机号已更换' : '手机号已绑定', icon: 'success' })
@@ -378,10 +387,14 @@ async function handleCancelAccount() {
         })
         if (res.code === 0) {
           uni.showToast({ title: '账号已注销', icon: 'success' })
+          familyStore.clearFamilyState()
+          babyStore.clearBabyCache()
           userStore.logout()
         } else {
           uni.showToast({ title: res.message || '注销失败', icon: 'none' })
         }
+      } catch (e: any) {
+        uni.showToast({ title: e.message || '注销失败', icon: 'none' })
       } finally {
         loading.value = false
       }

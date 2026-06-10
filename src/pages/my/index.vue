@@ -159,8 +159,13 @@ async function loadProfileData() {
   await Promise.allSettled([
     userStore.fetchUserInfo(),
     familyStore.fetchFamilyInfo(),
-    babyStore.fetchBabyList(),
   ])
+  if (!familyStore.hasFamily) {
+    babyStore.clearBabyCache()
+    return
+  }
+
+  await babyStore.fetchBabyList()
   if (familyStore.hasFamily) {
     familyStore.fetchMembers()
   }

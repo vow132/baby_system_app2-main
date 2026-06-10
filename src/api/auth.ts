@@ -95,7 +95,7 @@ export function changePhone(data: {
  * 注销账号
  */
 export function cancelAccount(data: { confirm_text: string; password?: string }) {
-  return post(API.AUTH.CANCEL_ACCOUNT, data)
+  return post(API.AUTH.CANCEL_ACCOUNT, data, { ignore401: true })
 }
 
 /**

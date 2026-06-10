@@ -25,6 +25,10 @@ import {
   deleteVoiceClip,
   getVoices,
   deleteVoice,
+  uploadVoiceLibrary,
+  getVoiceLibraryList,
+  switchVoiceById,
+  deleteVoiceByName,
   type VoiceCloneInfo,
   type ChatMessage,
   type VoiceSession,
@@ -214,32 +218,42 @@ export async function saveMemory(babyId: number, content: string, tags?: string[
 // ========== 音色库管理 ==========
 
 /**
- * 获取音色库列表（外部接口）
- * 返回格式：{ voices: ["xiaohe", "speech:liangbo:xxx:6262ce28", ...] }
+ * 获取音色库列表（后端接口）
+ * 返回格式：VoiceCloneInfo[]
  */
-export async function getVoiceLibrary(): Promise<string[]> {
-  const res = await getVoices()
-  // 外部接口返回 { voices: [...] } 格式
-  if (res.voices && Array.isArray(res.voices)) {
-    return res.voices
-  }
-  // 兼容其他格式
-  if (res.data && Array.isArray(res.data)) {
+export async function getVoiceLibrary(): Promise<VoiceCloneInfo[]> {
+  const res = await getVoiceLibraryList()
+  if (res.code === 0 && Array.isArray(res.data)) {
     return res.data
   }
   return []
 }
 
 /**
+ * 克隆音色（文件上传方式）
+ */
+export async function cloneVoiceLibrary(data: {
+  voice_role: string
+  voice_name: string
+  text: string
+  is_default?: boolean
+  audio_file: string
+}): Promise<any> {
+  const res = await uploadVoiceLibrary(data)
+  if (res.code !== 0) throw new Error(res.message || '克隆音色失败')
+  return res.data
+}
+
+/**
  * 设为默认音色
  */
 export async function switchDefaultVoice(voiceId: string): Promise<void> {
-  const res = await setDefaultVoice(voiceId)
+  const res = await switchVoiceById(voiceId)
   if (res.code !== 0) throw new Error(res.message || '切换默认音色失败')
 }
 
 /**
- * 训练新音色
+ * 训练新音色（旧接口）
  */
 export async function trainNewVoice(data: { baby_id: number; voice_role: string; audio_data: string; voice_name?: string }) {
   const res = await trainVoiceClone(data)
@@ -248,11 +262,11 @@ export async function trainNewVoice(data: { baby_id: number; voice_role: string;
 }
 
 /**
- * 删除音色（外部接口）
- * @param voiceUri 音色URI，如 "speech:star:xxx:0da77d14"
+ * 删除音色（后端接口，根据音色名称删除）
+ * @param voiceName 音色名称
  */
-export async function removeVoice(voiceUri: string): Promise<void> {
-  const res = await deleteVoice(voiceUri)
+export async function removeVoice(voiceName: string): Promise<void> {
+  const res = await deleteVoiceByName(voiceName)
   if (res.code !== 0) throw new Error(res.message || '删除音色失败')
 }
 

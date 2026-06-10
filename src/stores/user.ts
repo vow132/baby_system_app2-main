@@ -105,7 +105,14 @@ export const useUserStore = defineStore('user', () => {
   async function updateUserInfoAction(data: { nickname?: string; avatar_url?: string; gender?: number }) {
     const res = await updateUserInfo(data)
     if (res.code === 0) {
-      await fetchUserInfo()
+      const responseUser = res.data && typeof res.data === 'object' ? res.data : {}
+      const nextUser = {
+        ...(userInfo.value || {}),
+        ...data,
+        ...responseUser,
+      } as UserInfo
+      userInfo.value = nextUser
+      uni.setStorageSync(USER_INFO_KEY, nextUser)
     }
     return res
   }

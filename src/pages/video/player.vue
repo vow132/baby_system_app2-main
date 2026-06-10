@@ -1,6 +1,6 @@
 <template>
   <view class="player-page">
-    <view class="back-btn" @click="goBack">
+    <view class="back-btn" :style="{ top: (statusBarHeight + 8) + 'px' }" @click="goBack">
       <u-icon name="arrow-left" size="20" color="#fff" />
       <text class="back-text">返回</text>
     </view>
@@ -23,8 +23,12 @@ import { ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 
 const videoUrl = ref('')
+const statusBarHeight = ref(44)
 
 onLoad((options) => {
+  const sysInfo = uni.getSystemInfoSync()
+  statusBarHeight.value = sysInfo.statusBarHeight || 44
+
   if (options?.url) {
     videoUrl.value = decodeURIComponent(options.url)
     console.log('[video-player] url:', videoUrl.value)
@@ -53,14 +57,14 @@ function onError(e: any) {
 }
 .back-btn {
   position: absolute;
-  top: 80rpx;
   left: 30rpx;
   z-index: 10;
   display: flex;
   align-items: center;
   gap: 8rpx;
   background: rgba(0, 0, 0, 0.5);
-  padding: 12rpx 24rpx;
+  min-height: 80rpx;
+  padding: 0 24rpx;
   border-radius: 32rpx;
 }
 .back-text {

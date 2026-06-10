@@ -325,8 +325,19 @@ function stopRefresh() {
 }
 
 async function loadData() {
+  await familyStore.fetchFamilyInfo()
+  if (!familyStore.hasFamily) {
+    babyStore.clearBabyCache()
+    deviceList.value = []
+    sensorData.value = null
+    events.value = []
+    todayRoutine.value = null
+    routineAdvice.value = null
+    recentMoments.value = []
+    return
+  }
+
   await Promise.allSettled([
-    familyStore.fetchFamilyInfo(),
     babyStore.fetchBabyList(),
     loadDevices(),
   ])

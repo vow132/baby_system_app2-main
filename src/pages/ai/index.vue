@@ -13,16 +13,17 @@
         <text class="section-action" @click="goVoiceOnboarding">录入新音色</text>
       </view>
       <view class="voice-list">
-        <view class="voice-card" v-for="(voice, index) in voices" :key="index">
-          <view class="voice-avatar" :class="index === 0 ? 'role-mom' : 'role-dad'">
+        <view class="voice-card" v-for="(voice, index) in voices" :key="voice.id || index" @click="setDefault(voice)">
+          <view class="voice-avatar" :class="'role-' + voice.voice_role">
             <u-icon name="account" size="24" color="#fff" />
           </view>
           <view class="voice-main">
-            <text class="voice-name">{{ getVoiceDisplayName(voice) }}</text>
-            <text class="voice-meta">音色ID: {{ voice }}</text>
+            <text class="voice-name">{{ voice.voice_name }}</text>
+            <text class="voice-meta">{{ getVoiceRoleName(voice.voice_role) }} · {{ voice.voice_id }}</text>
           </view>
           <view class="voice-actions">
-            <text class="delete-btn" @click="confirmDelete(voice)">删除</text>
+            <text v-if="voice.is_default" class="default-tag">默认</text>
+            <text class="delete-btn" @click.stop="confirmDelete(voice)">删除</text>
           </view>
         </view>
         <view class="empty" v-if="voices.length === 0">
@@ -43,11 +44,12 @@ import {
   switchDefaultVoice,
   removeVoice,
 } from '@/services/voice'
+import type { VoiceCloneInfo } from '@/api/voice'
 
 const babyStore = useBabyStore()
 
 // ---- 数据状态 ----
-const voices = ref<string[]>([])
+const voices = ref<VoiceCloneInfo[]>([])
 
 // ---- 页面生命周期 ----
 onShow(() => {
@@ -65,46 +67,43 @@ async function loadData() {
 }
 
 // ---- 工具方法 ----
-function getVoiceDisplayName(voice: string) {
-  // 根据音色ID返回友好名称
-  const nameMap: Record<string, string> = {
-    'xiaohe': '小何',
-    'longxiaoxia': '龙虾虾',
+function getVoiceDisplayName(voice: VoiceCloneInfo) {
+  return voice.voice_name || voice.voice_id
+}
+
+function getVoiceRoleName(role: string) {
+  const roleMap: Record<string, string> = {
     'mom': '妈妈',
     'dad': '爸爸',
+    'nanny': '保姆',
+    'other': '其他',
   }
-  // 如果是自定义音色（包含冒号），提取名称部分
-  if (voice.includes(':')) {
-    const parts = voice.split(':')
-    return parts[1] || voice
-  }
-  return nameMap[voice] || voice
+  return roleMap[role] || role
 }
 
 function goVoiceOnboarding() {
   uni.navigateTo({ url: '/pages/onboarding/index?direct=voice' })
 }
 
-async function setDefault(voiceId: string) {
+async function setDefault(voice: VoiceCloneInfo) {
   try {
-    await switchDefaultVoice(voiceId)
-    uni.showToast({ title: '已切换', icon: 'success' })
+    await switchDefaultVoice(voice.voice_id)
+    uni.showToast({ title: '已切换为：' + voice.voice_name, icon: 'success' })
     loadData()
   } catch {
     uni.showToast({ title: '切换失败', icon: 'none' })
   }
 }
 
-function confirmDelete(voice: string) {
-  const voiceName = getVoiceDisplayName(voice)
+function confirmDelete(voice: VoiceCloneInfo) {
   uni.showModal({
     title: '删除音色',
-    content: `确定要删除「${voiceName}」吗？删除后不可恢复。`,
+    content: `确定要删除「${voice.voice_name}」吗？删除后不可恢复。`,
     confirmColor: '#fa3534',
     success: async (modalRes) => {
       if (!modalRes.confirm) return
       try {
-        await removeVoice(voice)
+        await removeVoice(voice.voice_name)
         uni.showToast({ title: '已删除', icon: 'success' })
         loadData()
       } catch {

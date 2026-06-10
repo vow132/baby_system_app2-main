@@ -358,7 +358,7 @@ export function getVoices(): Promise<{ voices: string[] }> {
  * 删除音色（外部接口）
  * DELETE http://223.247.96.246:30028/v1/audio/delete_voice?voice_uri=xxx
  */
-export function deleteVoice(voiceUri: string) {
+export function deleteVoice(voiceUri: string): Promise<any> {
   const token = uni.getStorageSync('baby_bed_token') || ''
   return new Promise((resolve, reject) => {
     uni.request({
@@ -368,11 +368,16 @@ export function deleteVoice(voiceUri: string) {
         'Authorization': token ? `Bearer ${token}` : '',
       },
       success: (res: any) => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`删除音色失败: ${res.statusCode} ${JSON.stringify(res.data || '')}`))
+          return
+        }
+
         try {
           const parsed = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
-          resolve(parsed)
+          resolve(parsed || { success: true })
         } catch {
-          resolve({ code: 0, data: res.data })
+          resolve({ success: true, data: res.data })
         }
       },
       fail: (err: any) => {
@@ -410,4 +415,123 @@ export function cloneVoiceExternal(data: { customName: string; text: string; fil
       },
     })
   })
+}
+
+// ========== 新增音色库接口（后端统一管理） ==========
+
+/**
+ * 克隆音色（文件上传方式）
+ * POST /api/v1/voice/library/upload
+ */
+function parseUploadResponse(raw: any) {
+  if (raw && typeof raw === 'object') return raw
+
+  const text = String(raw ?? '').replace(/^\uFEFF/, '').trim()
+  if (!text) return null
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    const jsonLike = text.match(/\{[\s\S]*\}/)?.[0]
+    if (jsonLike) {
+      try {
+        return JSON.parse(jsonLike)
+      } catch {
+        // fall through to plain-text response handling
+      }
+    }
+  }
+
+  return {
+    code: -1,
+    message: text.length > 120 ? `${text.slice(0, 120)}...` : text,
+    raw: text,
+  }
+}
+
+function getUploadResponseMessage(parsed: any, fallback: string) {
+  if (!parsed) return fallback
+  if (typeof parsed.message === 'string' && parsed.message.trim()) return parsed.message.trim()
+  if (typeof parsed.detail === 'string' && parsed.detail.trim()) return parsed.detail.trim()
+  if (Array.isArray(parsed.detail) && parsed.detail.length) {
+    const first = parsed.detail[0]
+    if (typeof first === 'string') return first
+    if (first && typeof first.msg === 'string') return first.msg
+  }
+  return fallback
+}
+
+export function uploadVoiceLibrary(data: {
+  voice_role: string
+  voice_name: string
+  text: string
+  is_default?: boolean
+  audio_file: string  // 文件路径
+}) {
+  const token = uni.getStorageSync('baby_bed_token') || ''
+  return new Promise<any>((resolve, reject) => {
+    uni.uploadFile({
+      url: BASE_URL + API.VOICE.LIBRARY_UPLOAD,
+      filePath: data.audio_file,
+      name: 'audio_file',
+      formData: {
+        voice_role: data.voice_role,
+        voice_name: data.voice_name,
+        text: data.text,
+        is_default: data.is_default ? 'true' : 'false',
+      },
+      header: {
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+      success: (res: any) => {
+        const parsed = parseUploadResponse(res.data)
+        const statusCode = Number(res.statusCode || 0)
+
+        if (statusCode && (statusCode < 200 || statusCode >= 300)) {
+          console.error('[voice-library-upload] http error', {
+            statusCode,
+            response: res.data,
+            parsed,
+          })
+          reject(new Error(getUploadResponseMessage(parsed, `上传失败(${statusCode})`)))
+          return
+        }
+
+        if (!parsed) {
+          console.error('[voice-library-upload] empty response', res)
+          reject(new Error('后端返回空响应'))
+          return
+        }
+
+        resolve(parsed)
+      },
+      fail: (err: any) => {
+        reject(new Error('上传失败: ' + (err.errMsg || '网络错误')))
+      },
+    })
+  })
+}
+
+/**
+ * 获取音色库列表（后端接口）
+ * GET /api/v1/voice/library
+ */
+export function getVoiceLibraryList(): Promise<{ code: number; data: VoiceCloneInfo[] }> {
+  return get(API.VOICE.LIBRARY)
+}
+
+/**
+ * 切换音色（后端接口）
+ * POST /api/v1/voice/switch
+ */
+export function switchVoiceById(voiceId: string) {
+  return post(API.VOICE.SWITCH, { voice_id: voiceId })
+}
+
+/**
+ * 根据音色名称删除音色
+ * DELETE /api/v1/voice/library/by-name/{voice_name}
+ */
+export function deleteVoiceByName(voiceName: string) {
+  return del(API.VOICE.LIBRARY_DELETE(voiceName))
 }

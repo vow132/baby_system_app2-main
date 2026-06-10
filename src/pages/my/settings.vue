@@ -150,9 +150,18 @@ function editNickname() {
     editable: true,
     placeholderText: '请输入新昵称',
     success: async (res) => {
-      if (res.confirm && res.content) {
-        await userStore.updateUserInfoAction({ nickname: res.content })
-        uni.showToast({ title: '修改成功', icon: 'success' })
+      const nickname = res.content?.trim()
+      if (res.confirm && nickname) {
+        try {
+          const result = await userStore.updateUserInfoAction({ nickname })
+          if (result.code === 0) {
+            uni.showToast({ title: '修改成功', icon: 'success' })
+          } else {
+            uni.showToast({ title: result.message || '修改失败', icon: 'none' })
+          }
+        } catch (error: any) {
+          uni.showToast({ title: error.message || '修改失败', icon: 'none' })
+        }
       }
     }
   })

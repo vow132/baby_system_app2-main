@@ -182,11 +182,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, onUnmounted } from 'vue'
-import { useUserStore, useFamilyStore } from '@/stores'
+import { useUserStore, useFamilyStore, useBabyStore } from '@/stores'
 import { sendSmsCode } from '@/api/auth'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
+const babyStore = useBabyStore()
 
 const currentTab = ref(0)
 const loading = ref(false)
@@ -210,8 +211,12 @@ const registerForm = reactive({
   nickname: ''
 })
 
-function isValidPhone(phone: string) {
-  return /^1\d{10}$/.test(phone)
+function normalizePhone(phone: unknown) {
+  return String(phone ?? '').replace(/\D/g, '').slice(0, 11)
+}
+
+function isValidPhone(phone: unknown) {
+  return /^1\d{10}$/.test(normalizePhone(phone))
 }
 
 function startCodeCountdown() {
@@ -228,8 +233,7 @@ function startCodeCountdown() {
 
 function clearAccountScopedCache() {
   familyStore.clearFamilyState()
-  uni.removeStorageSync('baby_bed_baby_list_cache')
-  uni.removeStorageSync('baby_bed_current_baby_cache')
+  babyStore.clearBabyCache()
 }
 
 function goToInitialPage(hasFamily: boolean) {
@@ -275,7 +279,9 @@ async function handleLoginSubmit() {
 }
 
 async function handleLogin() {
-  if (!isValidPhone(loginForm.phone)) {
+  const phone = normalizePhone(loginForm.phone)
+  loginForm.phone = phone
+  if (!isValidPhone(phone)) {
     uni.showToast({ title: '请输入正确的手机号', icon: 'none' })
     return
   }
@@ -286,7 +292,7 @@ async function handleLogin() {
 
   loading.value = true
   try {
-    const res = await userStore.loginAction(loginForm.phone, loginForm.password)
+    const res = await userStore.loginAction(phone, loginForm.password)
     if (res.code === 0) {
       await redirectAfterLogin()
     } else {
@@ -300,7 +306,9 @@ async function handleLogin() {
 }
 
 async function sendLoginCode() {
-  if (!isValidPhone(loginForm.phone)) {
+  const phone = normalizePhone(loginForm.phone)
+  loginForm.phone = phone
+  if (!isValidPhone(phone)) {
     uni.showToast({ title: '请输入正确的手机号', icon: 'none' })
     return
   }
@@ -308,7 +316,7 @@ async function sendLoginCode() {
 
   loading.value = true
   try {
-    const res = await sendSmsCode({ phone: loginForm.phone, scene: 'login' })
+    const res = await sendSmsCode({ phone, scene: 'login' })
     if (res.code === 0) {
       uni.showToast({ title: '验证码已发送', icon: 'success' })
       startCodeCountdown()
@@ -321,7 +329,9 @@ async function sendLoginCode() {
 }
 
 async function handleCodeLogin() {
-  if (!isValidPhone(loginForm.phone)) {
+  const phone = normalizePhone(loginForm.phone)
+  loginForm.phone = phone
+  if (!isValidPhone(phone)) {
     uni.showToast({ title: '请输入正确的手机号', icon: 'none' })
     return
   }
@@ -332,7 +342,7 @@ async function handleCodeLogin() {
 
   loading.value = true
   try {
-    const res = await userStore.codeLoginAction(loginForm.phone, loginForm.code)
+    const res = await userStore.codeLoginAction(phone, loginForm.code)
     if (res.code === 0) {
       await redirectAfterLogin()
     } else {
@@ -389,7 +399,9 @@ async function handleWechatLogin() {
 }
 
 async function handleRegister() {
-  if (!isValidPhone(registerForm.phone)) {
+  const phone = normalizePhone(registerForm.phone)
+  registerForm.phone = phone
+  if (!isValidPhone(phone)) {
     uni.showToast({ title: '请输入正确的手机号', icon: 'none' })
     return
   }
@@ -413,7 +425,7 @@ async function handleRegister() {
   loading.value = true
   try {
     const res = await userStore.registerAction(
-      registerForm.phone,
+      phone,
       registerForm.password,
       registerForm.nickname
     )

@@ -1,7 +1,7 @@
 <template>
   <view class="onboarding-page">
     <!-- 自定义导航栏返回按钮 -->
-    <view class="custom-nav-bar">
+    <view class="custom-nav-bar" :style="{ paddingTop: statusBarHeight + 'px' }">
       <view class="nav-back" @click="goBack">
         <u-icon name="arrow-left" size="20" color="#333" />
         <text class="nav-back-text">返回</text>
@@ -275,6 +275,11 @@
           <u-input v-model="voiceForm.voice_name" placeholder="如：妈妈的声音" border="surround" clearable />
         </view>
 
+        <view class="form-group">
+          <text class="form-label">朗读文本</text>
+          <u-input v-model="voiceForm.voice_text" placeholder="请填写录音中实际朗读的内容" border="surround" clearable />
+        </view>
+
         <view class="record-area">
           <!-- 录音方式切换 -->
           <view class="record-mode-tabs">
@@ -304,7 +309,7 @@
               <u-icon name="folder-add" size="28" color="#667eea" />
               <text class="upload-btn-text">选择音频文件</text>
             </view>
-            <text class="upload-hint">从微信聊天记录选取 mp3/wav/m4a/aac</text>
+            <text class="upload-hint">从微信聊天记录选取 mp3/wav</text>
           </view>
 
           <!-- 已有录音：试听与重录 -->
@@ -372,8 +377,9 @@ import { ref, computed, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useBabyStore, useFamilyStore } from '@/stores'
 import { post } from '@/api/request'
-import { API } from '@/api/config'
+import { API, SPEECH_BASE_URL } from '@/api/config'
 import { getDeviceList, type DeviceInfo } from '@/api/device'
+import { cloneVoiceLibrary } from '@/services/voice'
 
 const babyStore = useBabyStore()
 const familyStore = useFamilyStore()
@@ -381,11 +387,15 @@ const familyStore = useFamilyStore()
 // 直接模式：从AI陪伴页面进入，跳过家庭/宝宝/连接设备，直接到语音录入
 const directMode = ref(false)
 const reconfigMode = ref(false)
+const statusBarHeight = ref(44)
 
 const currentStep = ref(0)
 const onboardingEntryMode = ref<'create' | 'join'>('create')
 
 onLoad(async (options: any) => {
+  const sysInfo = uni.getSystemInfoSync()
+  statusBarHeight.value = sysInfo.statusBarHeight || 44
+
   // 直接模式：从AI陪伴页面进入，跳到语音录入
   if (options?.direct === 'voice') {
     directMode.value = true
@@ -487,7 +497,11 @@ const steps = [
 
 const wifiForm = ref({ ssid: '', password: '', device_sn: '' })
 const bindForm = ref({ device_sn: '', baby_id: 0 })
-const voiceForm = ref({ voice_role: 'mom', voice_name: '' })
+const voiceForm = ref({
+  voice_role: 'mom',
+  voice_name: '',
+  voice_text: '宝宝乖乖睡觉，爸爸妈妈会一直陪着你，祝你做个甜甜的梦。',
+})
 const babyForm = ref({ name: '', gender: 1, birth_date: '' })
 const familyForm = ref({ family_name: '', invite_code: '' })
 const birthDateValue = ref(Date.now())
@@ -913,11 +927,16 @@ function chooseAudioFile() {
   uni.chooseMessageFile({
     count: 1,
     type: 'file',
-    extension: ['.mp3', '.wav', '.m4a', '.aac'],
+    extension: ['mp3', 'wav'],
     success: (res) => {
       const file = res.tempFiles[0]
       if (file.size > 10 * 1024 * 1024) {
         uni.showToast({ title: '文件不能超过10MB', icon: 'none' })
+        return
+      }
+      const ext = getAudioFileExtension(file.name || file.path)
+      if (!['mp3', 'wav'].includes(ext)) {
+        uni.showToast({ title: '请上传 mp3 或 wav 格式音频', icon: 'none' })
         return
       }
       audioFilePath.value = file.path
@@ -931,23 +950,66 @@ function chooseAudioFile() {
   })
 }
 
+function getAudioFileExtension(fileNameOrPath: string): string {
+  const cleanPath = (fileNameOrPath || '').split('?')[0]
+  const parts = cleanPath.split('.')
+  return parts.length > 1 ? parts.pop()!.toLowerCase() : ''
+}
+
+function prepareInnerAudioOptions() {
+  const options = {
+    mixWithOther: false,
+    obeyMuteSwitch: false,
+    speakerOn: true,
+  }
+
+  try {
+    const setInnerAudioOption = (uni as any).setInnerAudioOption
+    if (typeof setInnerAudioOption === 'function') {
+      setInnerAudioOption({
+        ...options,
+        fail: (err: any) => console.warn('[voice-preview] setInnerAudioOption fail', err),
+      })
+    }
+  } catch (error) {
+    console.warn('[voice-preview] setInnerAudioOption unavailable:', error)
+  }
+}
+
 function playAudio() {
   if (!audioFilePath.value) return
 
   if (isPlaying.value && innerAudioContext) {
-    innerAudioContext.pause()
+    innerAudioContext.stop()
     isPlaying.value = false
     return
   }
 
   if (innerAudioContext) innerAudioContext.destroy()
+  prepareInnerAudioOptions()
+
   innerAudioContext = uni.createInnerAudioContext()
+  innerAudioContext.autoplay = false
+  innerAudioContext.volume = 1
+  innerAudioContext.startTime = 0
+  ;(innerAudioContext as any).obeyMuteSwitch = false
   innerAudioContext.src = audioFilePath.value
-  innerAudioContext.onPlay(() => { isPlaying.value = true })
-  innerAudioContext.onEnded(() => { isPlaying.value = false })
-  innerAudioContext.onError(() => {
+  innerAudioContext.onPlay(() => {
+    isPlaying.value = true
+  })
+  innerAudioContext.onEnded(() => {
     isPlaying.value = false
-    uni.showToast({ title: '播放失败', icon: 'none' })
+  })
+  innerAudioContext.onStop(() => {
+    isPlaying.value = false
+  })
+  innerAudioContext.onPause(() => {
+    isPlaying.value = false
+  })
+  innerAudioContext.onError((err: any) => {
+    isPlaying.value = false
+    console.error('[voice-preview] onError:', err)
+    uni.showToast({ title: `播放失败 ${err?.errCode || ''}`, icon: 'none' })
   })
   innerAudioContext.onCanplay(() => {
     if (recordDuration.value === 0 && innerAudioContext) {
@@ -980,9 +1042,25 @@ function fileToBase64(filePath: string): Promise<string> {
   })
 }
 
+function getVoiceUriFromResponse(res: any): string {
+  if (!res) return ''
+  if (typeof res.uri === 'string') return res.uri
+  if (typeof res.voice_uri === 'string') return res.voice_uri
+  if (typeof res.data?.uri === 'string') return res.data.uri
+  if (typeof res.data?.voice_uri === 'string') return res.data.voice_uri
+  return ''
+}
+
 async function submitVoiceClone() {
-  if (!voiceForm.value.voice_name) {
+  const voiceName = voiceForm.value.voice_name.trim()
+  const voiceText = voiceForm.value.voice_text.trim()
+
+  if (!voiceName) {
     uni.showToast({ title: '请输入音色名称', icon: 'none' })
+    return
+  }
+  if (!voiceText) {
+    uni.showToast({ title: '请输入录音对应的朗读文本', icon: 'none' })
     return
   }
   if (!audioFilePath.value) {
@@ -993,6 +1071,20 @@ async function submitVoiceClone() {
     uni.showToast({ title: '录音不足5秒，请重新录制', icon: 'none' })
     return
   }
+  if (recordMode.value === 'upload') {
+    const ext = getAudioFileExtension(audioFileName.value || audioFilePath.value)
+    if (!['mp3', 'wav'].includes(ext)) {
+      uni.showToast({ title: '请上传 mp3 或 wav 格式音频', icon: 'none' })
+      return
+    }
+  }
+  const familyRes = await familyStore.fetchFamilyInfo()
+  if (familyRes.code !== 0 || !familyRes.data) {
+    uni.showToast({ title: '请先创建或加入家庭', icon: 'none' })
+    return
+  }
+
+  await babyStore.fetchBabyList()
   if (!babyStore.currentBaby) {
     uni.showToast({ title: '请先添加宝宝', icon: 'none' })
     return
@@ -1000,48 +1092,28 @@ async function submitVoiceClone() {
 
   training.value = true
   try {
-    // 调用外部语音接口克隆音色
-    const token = uni.getStorageSync('baby_bed_token')
-    const SPEECH_BASE_URL = 'http://223.247.96.246:30028/v1'
-    const uploadRes = await new Promise<any>((resolve, reject) => {
-      uni.uploadFile({
-        url: SPEECH_BASE_URL + '/audio/clone_voice',
-        filePath: audioFilePath.value,
-        name: 'file',
-        formData: {
-          customName: voiceForm.value.voice_name,
-          text: voiceForm.value.voice_name,
-        },
-        header: {
-          'Authorization': token ? `Bearer ${token}` : '',
-          'Accept': 'application/json',
-        },
-        success: (res) => {
-          console.log('克隆音色响应:', res)
-          try { resolve(JSON.parse(res.data)) } catch { reject(new Error('响应解析失败')) }
-        },
-        fail: (err) => {
-          console.error('克隆音色失败:', err)
-          reject(err)
-        },
-      })
+    // 调用后端接口克隆音色
+    const result = await cloneVoiceLibrary({
+      voice_role: voiceForm.value.voice_role,
+      voice_name: voiceName,
+      text: voiceText,
+      is_default: false,
+      audio_file: audioFilePath.value,
     })
 
-    console.log('克隆音色结果:', uploadRes)
-
-    // 外部接口返回成功或没有错误
-    uni.showToast({ title: '音色训练已提交', icon: 'success' })
+    console.log('克隆音色结果:', result)
+    uni.showToast({ title: '音色克隆成功', icon: 'success' })
     // 跳转到音色管理页面
     setTimeout(() => {
       uni.redirectTo({ url: '/pages/ai/index' })
     }, 1500)
   } catch (e: any) {
     console.error('克隆音色异常:', e)
-    // 即使出错也跳转（可能是网络问题但数据已提交）
-    uni.showToast({ title: '训练任务已提交', icon: 'success' })
-    setTimeout(() => {
-      uni.redirectTo({ url: '/pages/ai/index' })
-    }, 1500)
+    uni.showToast({
+      title: e?.message || '音色克隆失败',
+      icon: 'none',
+      duration: 3000,
+    })
   } finally {
     training.value = false
   }
@@ -1080,12 +1152,17 @@ onUnmounted(() => {
 }
 
 .custom-nav-bar {
-  padding: 20rpx 30rpx 10rpx;
+  padding: 0 30rpx 10rpx;
   background: #fff;
+  box-sizing: border-box;
   .nav-back {
+    width: 132rpx;
+    min-height: 88rpx;
     display: flex;
     align-items: center;
     gap: 8rpx;
+    position: relative;
+    z-index: 5;
     .nav-back-text { font-size: 28rpx; color: #333; }
   }
 }
