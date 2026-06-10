@@ -124,6 +124,14 @@ export const useBabyStore = defineStore('baby', () => {
     }
   }
 
+  // 清除宝宝缓存（退出家庭/退出登录时调用）
+  function clearBabyCache() {
+    babyList.value = []
+    currentBaby.value = null
+    uni.removeStorageSync(BABY_LIST_KEY)
+    uni.removeStorageSync(CURRENT_BABY_KEY)
+  }
+
   return {
     babyList,
     currentBaby,
@@ -134,5 +142,6 @@ export const useBabyStore = defineStore('baby', () => {
     updateBabyAction,
     deleteBabyAction,
     setCurrentBaby,
+    clearBabyCache,
   }
 })

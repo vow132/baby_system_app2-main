@@ -368,8 +368,13 @@ function confirmLeaveFamily() {
         const result = await familyStore.leaveFamilyAction()
         if (result.code === 0) {
           members.value = []
+          // 清除宝宝缓存
+          const babyStore = useBabyStore()
+          babyStore.clearBabyCache()
           uni.showToast({ title: '已离开家庭', icon: 'success' })
-          await loadFamilyData()
+          setTimeout(() => {
+            uni.reLaunch({ url: '/pages/onboarding/index?first=1' })
+          }, 1000)
         } else {
           uni.showToast({ title: result.message || '离开家庭失败', icon: 'none' })
         }
@@ -471,9 +476,14 @@ function confirmDissolveFamily() {
         loading.value = true
         const result = await familyStore.dissolveFamilyAction()
         if (result.code === 0) {
+          // 清除宝宝缓存
+          const babyStore = useBabyStore()
+          babyStore.clearBabyCache()
           uni.showToast({ title: '家庭已解散', icon: 'success' })
           members.value = []
-          await loadFamilyData()
+          setTimeout(() => {
+            uni.reLaunch({ url: '/pages/onboarding/index?first=1' })
+          }, 1000)
         } else {
           uni.showToast({ title: result.message || '解散家庭失败', icon: 'none' })
         }

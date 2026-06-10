@@ -267,6 +267,8 @@ async function handleChangePassword() {
     } else {
       uni.showToast({ title: res.message || '修改失败', icon: 'none' })
     }
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '修改失败', icon: 'none' })
   } finally {
     loading.value = false
   }

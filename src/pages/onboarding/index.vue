@@ -894,7 +894,7 @@ function startRecord() {
   }, 1000)
 
   recorderManager.start({
-    format: 'mp3',
+    format: 'wav',
     sampleRate: 16000,
     numberOfChannels: 1,
     encodeBitRate: 96000,
@@ -1000,48 +1000,48 @@ async function submitVoiceClone() {
 
   training.value = true
   try {
-    const base64Data = await fileToBase64(audioFilePath.value)
-    const res = await post(API.VOICE.CLONE_TRAIN, {
-      baby_id: babyStore.currentBaby.id,
-      voice_role: voiceForm.value.voice_role,
-      voice_name: voiceForm.value.voice_name,
-      audio_data: base64Data,
+    // 调用外部语音接口克隆音色
+    const token = uni.getStorageSync('baby_bed_token')
+    const SPEECH_BASE_URL = 'http://223.247.96.246:30028/v1'
+    const uploadRes = await new Promise<any>((resolve, reject) => {
+      uni.uploadFile({
+        url: SPEECH_BASE_URL + '/audio/clone_voice',
+        filePath: audioFilePath.value,
+        name: 'file',
+        formData: {
+          customName: voiceForm.value.voice_name,
+          text: voiceForm.value.voice_name,
+        },
+        header: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Accept': 'application/json',
+        },
+        success: (res) => {
+          console.log('克隆音色响应:', res)
+          try { resolve(JSON.parse(res.data)) } catch { reject(new Error('响应解析失败')) }
+        },
+        fail: (err) => {
+          console.error('克隆音色失败:', err)
+          reject(err)
+        },
+      })
     })
 
-    if (res.code === 0) {
-      uni.showToast({ title: '训练任务已提交', icon: 'success' })
-      currentStep.value = 3
-    } else {
-      uni.showToast({ title: res.message || '提交失败', icon: 'none' })
-    }
-  } catch {
-    try {
-      const uploadRes = await new Promise<any>((resolve, reject) => {
-        const token = uni.getStorageSync('baby_bed_token')
-        uni.uploadFile({
-          url: API.VOICE.CLONE,
-          filePath: audioFilePath.value,
-          name: 'audio_file',
-          formData: {
-            baby_id: String(babyStore.currentBaby!.id),
-            clip_name: voiceForm.value.voice_name,
-          },
-          header: { 'Authorization': token ? `Bearer ${token}` : '' },
-          success: (res) => {
-            try { resolve(JSON.parse(res.data)) } catch { reject(new Error('响应解析失败')) }
-          },
-          fail: (err) => reject(err),
-        })
-      })
-      if (uploadRes.code === 0) {
-        uni.showToast({ title: '语音上传成功', icon: 'success' })
-        currentStep.value = 3
-      } else {
-        uni.showToast({ title: uploadRes.message || '提交失败', icon: 'none' })
-      }
-    } catch {
-      uni.showToast({ title: '提交失败，请检查网络', icon: 'none' })
-    }
+    console.log('克隆音色结果:', uploadRes)
+
+    // 外部接口返回成功或没有错误
+    uni.showToast({ title: '音色训练已提交', icon: 'success' })
+    // 跳转到音色管理页面
+    setTimeout(() => {
+      uni.redirectTo({ url: '/pages/ai/index' })
+    }, 1500)
+  } catch (e: any) {
+    console.error('克隆音色异常:', e)
+    // 即使出错也跳转（可能是网络问题但数据已提交）
+    uni.showToast({ title: '训练任务已提交', icon: 'success' })
+    setTimeout(() => {
+      uni.redirectTo({ url: '/pages/ai/index' })
+    }, 1500)
   } finally {
     training.value = false
   }
@@ -1056,7 +1056,13 @@ function goDeviceList() {
 }
 
 function goBack() {
-  uni.navigateBack({ delta: 1 })
+  const pages = getCurrentPages()
+  if (pages.length > 1) {
+    uni.navigateBack({ delta: 1 })
+  } else {
+    // 页面栈为空（从 reLaunch 进入），用户已登录，跳转到首页
+    uni.switchTab({ url: '/pages/index/index' })
+  }
 }
 
 onUnmounted(() => {

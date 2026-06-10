@@ -215,11 +215,19 @@ export async function saveMemory(babyId: number, content: string, tags?: string[
 
 /**
  * 获取音色库列表（外部接口）
+ * 返回格式：{ voices: ["xiaohe", "speech:liangbo:xxx:6262ce28", ...] }
  */
-export async function getVoiceLibrary(): Promise<any[]> {
+export async function getVoiceLibrary(): Promise<string[]> {
   const res = await getVoices()
-  if (res.code !== 0) throw new Error(res.message || '获取音色列表失败')
-  return res.data || []
+  // 外部接口返回 { voices: [...] } 格式
+  if (res.voices && Array.isArray(res.voices)) {
+    return res.voices
+  }
+  // 兼容其他格式
+  if (res.data && Array.isArray(res.data)) {
+    return res.data
+  }
+  return []
 }
 
 /**

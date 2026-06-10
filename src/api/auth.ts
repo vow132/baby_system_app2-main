@@ -35,28 +35,28 @@ export interface LoginResponse {
  * 用户注册
  */
 export function register(data: { phone: string; password: string; nickname?: string }) {
-  return post<LoginResponse>(API.AUTH.REGISTER, data)
+  return post<LoginResponse>(API.AUTH.REGISTER, data, { ignore401: true })
 }
 
 /**
  * 用户登录
  */
 export function login(data: { phone: string; password: string }) {
-  return post<LoginResponse>(API.AUTH.LOGIN, data)
+  return post<LoginResponse>(API.AUTH.LOGIN, data, { ignore401: true })
 }
 
 /**
  * 发送短信验证码
  */
 export function sendSmsCode(data: { phone: string; scene: 'login' | 'reset_password' | 'bind_phone' | 'change_phone_old' | 'change_phone_new' }) {
-  return post(API.AUTH.SMS_CODE, data)
+  return post(API.AUTH.SMS_CODE, data, { ignore401: true })
 }
 
 /**
  * 手机验证码登录
  */
 export function codeLogin(data: { phone: string; code: string }) {
-  return post<LoginResponse>(API.AUTH.CODE_LOGIN, data)
+  return post<LoginResponse>(API.AUTH.CODE_LOGIN, data, { ignore401: true })
 }
 
 /**
@@ -70,7 +70,7 @@ export function resetPassword(data: { phone: string; code: string; new_password:
  * 登录态修改密码
  */
 export function changePassword(data: { old_password: string; new_password: string }) {
-  return post(API.AUTH.CHANGE_PASSWORD, data)
+  return post(API.AUTH.CHANGE_PASSWORD, data, { ignore401: true })
 }
 
 /**
@@ -102,14 +102,14 @@ export function cancelAccount(data: { confirm_text: string; password?: string })
  * 微信登录
  */
 export function wechatLogin(data: { code: string }) {
-  return post<LoginResponse>(API.AUTH.WECHAT_LOGIN, data)
+  return post<LoginResponse>(API.AUTH.WECHAT_LOGIN, data, { ignore401: true })
 }
 
 /**
  * 获取用户信息
  */
 export function getUserInfo() {
-  return get<UserInfo>(API.AUTH.INFO)
+  return get<UserInfo>(API.AUTH.INFO, undefined, { showError: false })
 }
 
 /**

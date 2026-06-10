@@ -5,7 +5,7 @@
  */
 import { get, post, put, del } from './request'
 import { API } from './config'
-import { BASE_URL } from './config'
+import { BASE_URL, SPEECH_BASE_URL, ASR_BASE_URL } from './config'
 
 // 音色信息（对齐后端 VoiceClipInfo）
 export interface VoiceClip {
@@ -110,15 +110,14 @@ export function switchVoice(data: { clip_id: number }) {
 }
 
 /**
- * 语音转换文字识别
- * POST /api/v1/voice/asr
- * 对齐后端 ASRRequest: { baby_id, audio_data }
+ * 语音转换文字识别（外部接口）
+ * POST http://223.247.96.246:30021/speech-to-text
  */
 export function voiceAsr(data: { baby_id: number; audio_data: string }): Promise<{ code: number; message: string; data: { text: string } }> {
   const token = uni.getStorageSync('baby_bed_token') || ''
   return new Promise((resolve, reject) => {
     uni.request({
-      url: BASE_URL + API.VOICE.ASR,
+      url: ASR_BASE_URL + '/speech-to-text',
       method: 'POST',
       data: data,
       header: {
@@ -130,7 +129,7 @@ export function voiceAsr(data: { baby_id: number; audio_data: string }): Promise
           const parsed = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
           resolve(parsed)
         } catch {
-          reject(new Error('ASR 响应解析失败'))
+          resolve({ code: 0, data: { text: '' }, message: '解析失败' })
         }
       },
       fail: (err: any) => {
@@ -141,12 +140,40 @@ export function voiceAsr(data: { baby_id: number; audio_data: string }): Promise
 }
 
 /**
- * 文字转换语音输出
- * POST /api/v1/voice/tts
- * 对齐后端 TTSRequest: { baby_id, text, voice_role? }
+ * 文字转换语音输出（外部接口）
+ * POST http://223.247.96.246:30028/v1/audio/generate_speech
  */
-export function voiceTts(data: { baby_id: number; text: string; voice_role?: string }) {
-  return post<{ audio_url: string }>(API.VOICE.TTS, data)
+export function voiceTts(data: { baby_id: number; text: string; voice_role?: string }): Promise<{ code: number; message: string; data: { audio_url: string } }> {
+  const token = uni.getStorageSync('baby_bed_token') || ''
+  return new Promise((resolve, reject) => {
+    uni.request({
+      url: SPEECH_BASE_URL + '/audio/generate_speech',
+      method: 'POST',
+      data: {
+        input: data.text,
+        voice: data.voice_role || 'longxiaoxia',
+        response_format: 'wav',
+        sample_rate: 24000,
+        stream: false,
+        speed: 1,
+      },
+      header: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+      success: (res: any) => {
+        try {
+          const parsed = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+          resolve(parsed)
+        } catch {
+          resolve({ code: 0, data: { audio_url: '' }, message: '解析失败' })
+        }
+      },
+      fail: (err: any) => {
+        reject(new Error('语音合成失败: ' + (err.errMsg || '网络错误')))
+      },
+    })
+  })
 }
 
 /**
@@ -300,24 +327,87 @@ export function setDefaultVoice(voiceId: string) {
 
 /**
  * 获取音色列表（外部接口）
- * GET /v1/audio/get_voices
+ * GET http://223.247.96.246:30028/v1/audio/get_voices
+ * 返回格式：{ voices: ["xiaohe", "speech:liangbo:xxx:6262ce28", ...] }
  */
-export function getVoices() {
-  return get<any[]>(API.VOICE.EXT_GET_VOICES)
+export function getVoices(): Promise<{ voices: string[] }> {
+  const token = uni.getStorageSync('baby_bed_token') || ''
+  return new Promise((resolve, reject) => {
+    uni.request({
+      url: SPEECH_BASE_URL + '/audio/get_voices',
+      method: 'GET',
+      header: {
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+      success: (res: any) => {
+        try {
+          const parsed = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+          resolve(parsed)
+        } catch {
+          resolve({ voices: [] })
+        }
+      },
+      fail: (err: any) => {
+        reject(new Error('获取音色列表失败: ' + (err.errMsg || '网络错误')))
+      },
+    })
+  })
 }
 
 /**
  * 删除音色（外部接口）
- * DELETE /v1/audio/delete_voice?voice_uri=xxx
+ * DELETE http://223.247.96.246:30028/v1/audio/delete_voice?voice_uri=xxx
  */
 export function deleteVoice(voiceUri: string) {
-  return del(`${API.VOICE.EXT_DELETE_VOICE}?voice_uri=${encodeURIComponent(voiceUri)}`)
+  const token = uni.getStorageSync('baby_bed_token') || ''
+  return new Promise((resolve, reject) => {
+    uni.request({
+      url: SPEECH_BASE_URL + `/audio/delete_voice?voice_uri=${encodeURIComponent(voiceUri)}`,
+      method: 'DELETE',
+      header: {
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+      success: (res: any) => {
+        try {
+          const parsed = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+          resolve(parsed)
+        } catch {
+          resolve({ code: 0, data: res.data })
+        }
+      },
+      fail: (err: any) => {
+        reject(new Error('删除音色失败: ' + (err.errMsg || '网络错误')))
+      },
+    })
+  })
 }
 
 /**
  * 克隆音色（外部接口）
- * POST /v1/audio/clone_voice
+ * POST http://223.247.96.246:30028/v1/audio/clone_voice
  */
 export function cloneVoiceExternal(data: { customName: string; text: string; file: any }) {
-  return post<any>(API.VOICE.EXT_CLONE_VOICE, data)
+  const token = uni.getStorageSync('baby_bed_token') || ''
+  return new Promise((resolve, reject) => {
+    uni.request({
+      url: SPEECH_BASE_URL + '/audio/clone_voice',
+      method: 'POST',
+      data: data,
+      header: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+      success: (res: any) => {
+        try {
+          const parsed = typeof res.data === 'string' ? JSON.parse(res.data) : res.data
+          resolve(parsed)
+        } catch {
+          resolve({ code: 0, data: res.data })
+        }
+      },
+      fail: (err: any) => {
+        reject(new Error('克隆音色失败: ' + (err.errMsg || '网络错误')))
+      },
+    })
+  })
 }

@@ -3,16 +3,18 @@
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { 
+import {
   getFamilyInfo, updateFamilyInfo, createFamily, joinFamily, getFamilyMembers, getInviteCode, regenerateInviteCode, transferFamilyAdmin, dissolveFamily, leaveFamily,
   updateFamilyMemberRole, removeFamilyMember,
-  type FamilyInfo, type FamilyMember 
+  type FamilyInfo, type FamilyMember
 } from '@/api/family'
 import { useUserStore } from './user'
 
+const FAMILY_INFO_KEY = 'baby_bed_family_info_cache'
+
 export const useFamilyStore = defineStore('family', () => {
-  // 状态
-  const familyInfo = ref<FamilyInfo | null>(null)
+  // 状态（从本地缓存恢复）
+  const familyInfo = ref<FamilyInfo | null>(uni.getStorageSync(FAMILY_INFO_KEY) || null)
   const members = ref<FamilyMember[]>([])
   
   // 计算属性
@@ -20,6 +22,21 @@ export const useFamilyStore = defineStore('family', () => {
   const familyName = computed(() => familyInfo.value?.family_name || '未加入家庭')
   const inviteCode = computed(() => familyInfo.value?.family_code || '')
   const isAdmin = computed(() => familyInfo.value?.is_admin === 1 || familyInfo.value?.relation === 'creator')
+
+  // 持久化家庭信息到本地缓存
+  function persistFamilyCache() {
+    if (familyInfo.value) {
+      uni.setStorageSync(FAMILY_INFO_KEY, familyInfo.value)
+    } else {
+      uni.removeStorageSync(FAMILY_INFO_KEY)
+    }
+  }
+
+  function clearFamilyState() {
+    familyInfo.value = null
+    members.value = []
+    persistFamilyCache()
+  }
 
   // 获取家庭信息
   async function fetchFamilyInfo() {
@@ -30,9 +47,11 @@ export const useFamilyStore = defineStore('family', () => {
       } else {
         familyInfo.value = null
       }
+      persistFamilyCache()
       return res
     } catch {
       familyInfo.value = null
+      persistFamilyCache()
       return { code: -1, message: '暂无家庭信息', data: null }
     }
   }
@@ -131,6 +150,7 @@ export const useFamilyStore = defineStore('family', () => {
     if (res.code === 0) {
       familyInfo.value = null
       members.value = []
+      persistFamilyCache()
     }
     return res
   }
@@ -141,6 +161,7 @@ export const useFamilyStore = defineStore('family', () => {
     if (res.code === 0) {
       familyInfo.value = null
       members.value = []
+      persistFamilyCache()
     }
     return res
   }
@@ -164,5 +185,7 @@ export const useFamilyStore = defineStore('family', () => {
     transferAdminAction,
     dissolveFamilyAction,
     leaveFamilyAction,
+    persistFamilyCache,
+    clearFamilyState,
   }
 })

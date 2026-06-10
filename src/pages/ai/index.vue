@@ -13,23 +13,16 @@
         <text class="section-action" @click="goVoiceOnboarding">录入新音色</text>
       </view>
       <view class="voice-list">
-        <view class="voice-card" v-for="voice in voices" :key="getVoiceUri(voice) || voice.id">
-          <view class="voice-avatar" :class="'role-' + (voice.voice_role || 'mom')">
-            <u-icon name="man" v-if="voice.voice_role === 'dad'" size="24" color="#fff" />
-            <u-icon name="woman" v-else-if="voice.voice_role === 'mom'" size="24" color="#fff" />
-            <u-icon name="account" v-else size="24" color="#fff" />
+        <view class="voice-card" v-for="(voice, index) in voices" :key="index">
+          <view class="voice-avatar" :class="index === 0 ? 'role-mom' : 'role-dad'">
+            <u-icon name="account" size="24" color="#fff" />
           </view>
           <view class="voice-main">
-            <text class="voice-name">{{ getVoiceName(voice) }}</text>
-            <text class="voice-meta">{{ getRoleLabel(voice.voice_role) }}{{ voice.similarity_score ? ' · 相似度 ' + voice.similarity_score : '' }}</text>
+            <text class="voice-name">{{ getVoiceDisplayName(voice) }}</text>
+            <text class="voice-meta">音色ID: {{ voice }}</text>
           </view>
           <view class="voice-actions">
-            <text class="default-tag" v-if="voice.is_default">当前使用</text>
-            <template v-else>
-              <text class="switch-btn" @click="setDefault(voice.voice_id || getVoiceUri(voice))">切换</text>
-              <text class="delete-btn" @click="confirmDelete(voice)">删除</text>
-            </template>
-            <text class="delete-btn" v-if="voice.is_default && voices.length > 1" @click="confirmDelete(voice)">删除</text>
+            <text class="delete-btn" @click="confirmDelete(voice)">删除</text>
           </view>
         </view>
         <view class="empty" v-if="voices.length === 0">
@@ -54,7 +47,7 @@ import {
 const babyStore = useBabyStore()
 
 // ---- 数据状态 ----
-const voices = ref<any[]>([])
+const voices = ref<string[]>([])
 
 // ---- 页面生命周期 ----
 onShow(() => {
@@ -67,22 +60,25 @@ async function loadData() {
     const voiceList = await getVoiceLibrary()
     voices.value = voiceList
   } catch {
-    // 后端未就绪时静默处理
+    voices.value = []
   }
 }
 
 // ---- 工具方法 ----
-function getRoleLabel(role: string) {
-  const map: Record<string, string> = { mom: '妈妈', dad: '爸爸', nanny: '保姆' }
-  return map[role] || '未命名'
-}
-
-function getVoiceName(voice: any) {
-  return voice.customName || voice.voice_name || voice.name || getRoleLabel(voice.voice_role) || '未命名音色'
-}
-
-function getVoiceUri(voice: any) {
-  return voice.voice_uri || voice.uri || voice.voice_id || ''
+function getVoiceDisplayName(voice: string) {
+  // 根据音色ID返回友好名称
+  const nameMap: Record<string, string> = {
+    'xiaohe': '小何',
+    'longxiaoxia': '龙虾虾',
+    'mom': '妈妈',
+    'dad': '爸爸',
+  }
+  // 如果是自定义音色（包含冒号），提取名称部分
+  if (voice.includes(':')) {
+    const parts = voice.split(':')
+    return parts[1] || voice
+  }
+  return nameMap[voice] || voice
 }
 
 function goVoiceOnboarding() {
@@ -99,9 +95,8 @@ async function setDefault(voiceId: string) {
   }
 }
 
-function confirmDelete(voice: any) {
-  const voiceUri = getVoiceUri(voice)
-  const voiceName = getVoiceName(voice)
+function confirmDelete(voice: string) {
+  const voiceName = getVoiceDisplayName(voice)
   uni.showModal({
     title: '删除音色',
     content: `确定要删除「${voiceName}」吗？删除后不可恢复。`,
@@ -109,11 +104,7 @@ function confirmDelete(voice: any) {
     success: async (modalRes) => {
       if (!modalRes.confirm) return
       try {
-        if (!voiceUri) {
-          uni.showToast({ title: '音色标识无效', icon: 'none' })
-          return
-        }
-        await removeVoice(voiceUri)
+        await removeVoice(voice)
         uni.showToast({ title: '已删除', icon: 'success' })
         loadData()
       } catch {

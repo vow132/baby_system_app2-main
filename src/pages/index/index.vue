@@ -15,6 +15,18 @@
     </view>
 
     <scroll-view scroll-y class="scroll-area" :style="{ paddingTop: (statusBarHeight + 56) + 'px' }">
+      <!-- 无家庭提示 -->
+      <view class="onboarding-hint" v-if="!familyStore.hasFamily" @click="goToOnboarding">
+        <view class="hint-icon">
+          <u-icon name="home-fill" size="24" color="#667eea" />
+        </view>
+        <view class="hint-content">
+          <text class="hint-title">创建或加入家庭</text>
+          <text class="hint-desc">完成设置后即可开始看护宝宝</text>
+        </view>
+        <u-icon name="arrow-right" size="18" color="#667eea" />
+      </view>
+
       <!-- 宝宝状态卡（核心情感锚点） -->
       <view class="baby-status-card">
         <view class="status-main" @click="showBabyPicker = true">
@@ -274,7 +286,6 @@ const routineAdviceDesc = computed(() => {
 })
 
 let refreshTimer: number | null = null
-let onboardingChecked = false
 
 onMounted(() => {
   const sysInfo = uni.getSystemInfoSync()
@@ -319,7 +330,6 @@ async function loadData() {
     babyStore.fetchBabyList(),
     loadDevices(),
   ])
-  checkOnboardingNeeded()
   await Promise.allSettled([
     loadSensorData(),
     loadEvents(),
@@ -327,15 +337,6 @@ async function loadData() {
     loadRoutineAdvice(),
     loadRecentMoments(),
   ])
-}
-
-function checkOnboardingNeeded() {
-  if (onboardingChecked) return
-  onboardingChecked = true
-  // 没有家庭就去引导页
-  if (!familyStore.hasFamily) {
-    uni.navigateTo({ url: '/pages/onboarding/index?first=1' })
-  }
 }
 
 async function loadDevices() {
@@ -511,6 +512,7 @@ function goToEventDetail(id: number) { uni.navigateTo({ url: `/pages/monitor/det
 function goToRoutine() { uni.navigateTo({ url: '/pages/routine/index' }) }
 function goToRoutineAdvice() { uni.navigateTo({ url: '/pages/routine/optimize' }) }
 function goToAI() { uni.navigateTo({ url: '/pages/ai/index' }) }
+function goToOnboarding() { uni.navigateTo({ url: '/pages/onboarding/index' }) }
 </script>
 
 <style lang="scss" scoped>
@@ -723,6 +725,48 @@ function goToAI() { uni.navigateTo({ url: '/pages/ai/index' }) }
   margin-right: 10rpx;
   background: #f3f5fb;
   flex-shrink: 0;
+}
+
+// 无家庭提示
+.onboarding-hint {
+  display: flex;
+  align-items: center;
+  margin: 24rpx 30rpx 0;
+  padding: 24rpx;
+  background: linear-gradient(135deg, #eef2ff, #f5f0ff);
+  border-radius: 20rpx;
+  border: 2rpx solid #d4daff;
+
+  .hint-icon {
+    width: 64rpx;
+    height: 64rpx;
+    border-radius: 16rpx;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 18rpx;
+    flex-shrink: 0;
+  }
+
+  .hint-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .hint-title {
+    display: block;
+    font-size: 28rpx;
+    font-weight: 600;
+    color: #1f2937;
+  }
+
+  .hint-desc {
+    display: block;
+    margin-top: 4rpx;
+    font-size: 24rpx;
+    color: #667eea;
+  }
 }
 
 .message-entry {

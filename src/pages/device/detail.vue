@@ -64,7 +64,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { deleteDevice, diagnoseDevice, getDeviceBattery, getDeviceList, getDeviceStatus, getFirmwareVersion, rebootDevice, switchDeviceMode, unbindDevice, upgradeDevice, type DeviceBattery, type DeviceInfo, type FirmwareVersion } from '@/api/device'
+import { deleteDevice, diagnoseDevice, getDeviceBattery, getDeviceList, getDeviceStatus, getFirmwareVersion, rebootDevice, switchDeviceMode, unbindDevice, updateDeviceName, upgradeDevice, type DeviceBattery, type DeviceInfo, type FirmwareVersion } from '@/api/device'
 import { useBabyStore } from '@/stores'
 import { clearRemovedDevice, getDeviceDisplayName, getLocalRegisteredDevices, markDeviceRemoved, removeLocalRegisteredDevice, setDeviceAlias, upsertLocalRegisteredDevice } from '@/common/deviceLocal'
 
@@ -83,7 +83,8 @@ const modes = [
   { label: '拼床', value: 'co_sleep', icon: 'home', color: 'linear-gradient(135deg, #ff9900, #f5a623)', desc: '亲近陪睡', policy: '弱化灯光与声音' },
 ]
 
-const displayName = computed(() => getDeviceDisplayName(deviceSn.value, device.value?.device_name))
+// 直接使用数据库中的 device_name
+const displayName = computed(() => device.value?.device_name || deviceSn.value)
 const firmwareText = computed(() => firmware.value?.current_version || device.value?.firmware_version || '待同步')
 const batteryText = computed(() => {
   if (!battery.value) return '待同步'
@@ -124,7 +125,8 @@ async function loadDevice() {
 
   if (statusRes.status === 'fulfilled' && isSuccessCode(statusRes.value.code)) {
     device.value = statusRes.value.data as DeviceInfo
-    renameValue.value = getDeviceDisplayName(deviceSn.value, device.value?.device_name)
+    // 直接使用数据库中的 device_name，不使用本地别名
+    renameValue.value = device.value?.device_name || ''
   }
 
   if (listRes.status === 'fulfilled' && isSuccessCode(listRes.value.code) && Array.isArray(listRes.value.data)) {
@@ -214,17 +216,21 @@ async function saveRename() {
     uni.showToast({ title: '请输入设备名称', icon: 'none' })
     return
   }
-  const hasSameName = deviceList.value.some((item) => {
-    return item.device_sn !== deviceSn.value && getDeviceDisplayName(item.device_sn, item.device_name) === name
-  })
-  if (hasSameName) {
-    uni.showToast({ title: '名称已存在', icon: 'none' })
-    return
+
+  // 调用后端 API 更新设备名称到数据库
+  try {
+    const res = await updateDeviceName(deviceSn.value, name)
+    if (isSuccessCode(res.code)) {
+      // 更新本地显示
+      if (device.value) device.value.device_name = name
+      showRenamePopup.value = false
+      uni.showToast({ title: '名称修改成功', icon: 'success' })
+    } else {
+      uni.showToast({ title: res.message || '修改失败', icon: 'none' })
+    }
+  } catch {
+    uni.showToast({ title: '修改失败', icon: 'none' })
   }
-  setDeviceAlias(deviceSn.value, name)
-  if (device.value) device.value.device_name = name
-  showRenamePopup.value = false
-  uni.showToast({ title: '名称修改成功', icon: 'success' })
 }
 
 function unbindCurrentDevice() {

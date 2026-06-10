@@ -17,10 +17,26 @@ const DEV_BASE_URL = 'http://223.247.96.246:8123/api/v1'
 // 生产环境
 const PROD_BASE_URL = 'https://your-domain.com/api/v1'
 
+// 外部语音服务地址
+const DEV_SPEECH_BASE_URL = 'http://223.247.96.246:30028/v1'
+const PROD_SPEECH_BASE_URL = 'https://your-speech-domain.com/v1'
+
+// 语音识别服务地址（不同端口）
+const DEV_ASR_BASE_URL = 'http://223.247.96.246:30021'
+const PROD_ASR_BASE_URL = 'https://your-asr-domain.com'
+
 // 当前使用的后端地址
 // 开发阶段直接用 DEV_BASE_URL，上线前改为 PROD_BASE_URL
 export const BASE_URL = DEV_BASE_URL
 // export const BASE_URL = PROD_BASE_URL  // 上线时取消这行注释，注释上面那行
+
+// 当前使用的外部语音服务地址
+export const SPEECH_BASE_URL = DEV_SPEECH_BASE_URL
+// export const SPEECH_BASE_URL = PROD_SPEECH_BASE_URL  // 上线时取消这行注释
+
+// 当前使用的语音识别服务地址
+export const ASR_BASE_URL = DEV_ASR_BASE_URL
+// export const ASR_BASE_URL = PROD_ASR_BASE_URL  // 上线时取消这行注释
 
 // ========== 请求超时配置 ==========
 export const TIMEOUT = 30000
@@ -87,6 +103,7 @@ export const API = {
     BIND: '/device/bind',                                          // POST 将设备绑定到指定宝宝（共用）
     UNBIND: '/device/unbind',                                      // POST 解除设备与宝宝的绑定（共用）
     DELETE: (device_sn: string) => `/device/${device_sn}`,         // DELETE 注销设备并删除数据库记录（小程序）
+    UPDATE_NAME: '/device/name',  // PUT 修改设备名称（小程序）
     MODE_SWITCH: '/device/mode/switch',                            // POST 切换睡床/游戏床/拼床模式（共用）
     MODE_HISTORY: '/device/mode/history',                          // GET 查看设备模式切换历史记录（共用）
   },
@@ -165,12 +182,12 @@ export const API = {
     CLONE_TRAIN: '/voice/clone/train',         // POST 训练语音克隆模型
     CLONE_VOICES: '/voice/clone/voices',       // GET 获取音色库列表（旧）
     CLONE_VOICE_DEFAULT: (voice_id: string) => `/voice/clone/voices/${voice_id}/default`, // PUT 设置默认音色
-    // 外部语音接口
-    EXT_GET_VOICES: '/v1/audio/get_voices',                // GET 获取音色列表
-    EXT_DELETE_VOICE: '/v1/audio/delete_voice',            // DELETE 删除音色（参数：voice_uri）
-    EXT_CLONE_VOICE: '/v1/audio/clone_voice',              // POST 克隆音色
-    EXT_GENERATE_SPEECH: '/v1/audio/generate_speech',      // POST 语音合成
-    EXT_SPEECH_TO_TEXT: '/speech-to-text',                  // POST 语音识别
+    // 外部语音接口（注意：BASE_URL 已包含 /api/v1，所以这里不需要 /v1 前缀）
+    EXT_GET_VOICES: '/audio/get_voices',                // GET 获取音色列表
+    EXT_DELETE_VOICE: '/audio/delete_voice',            // DELETE 删除音色（参数：voice_uri）
+    EXT_CLONE_VOICE: '/audio/clone_voice',              // POST 克隆音色
+    EXT_GENERATE_SPEECH: '/audio/generate_speech',      // POST 语音合成
+    EXT_SPEECH_TO_TEXT: '/speech-to-text',              // POST 语音识别
   },
 
   // ========== 温馨瞬间模块（4个，全部小程序接口） ==========

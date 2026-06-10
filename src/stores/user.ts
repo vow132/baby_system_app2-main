@@ -19,13 +19,44 @@ export const useUserStore = defineStore('user', () => {
   const nickname = computed(() => userInfo.value?.nickname || '未登录')
   const avatar = computed(() => userInfo.value?.avatar_url || '')
 
+  function setLoginSession(data: LoginResponse) {
+    token.value = data.access_token
+    uni.setStorageSync(TOKEN_KEY, data.access_token)
+
+    if (data.user) {
+      const nextUser: UserInfo = {
+        id: data.user.id,
+        phone: data.user.phone || null,
+        email: null,
+        nickname: data.user.nickname || null,
+        avatar_url: data.user.avatar_url || null,
+        gender: null,
+        status: null,
+        last_login_at: null,
+        created_at: null,
+      }
+      userInfo.value = nextUser
+      uni.setStorageSync(USER_INFO_KEY, nextUser)
+    } else {
+      userInfo.value = null
+      uni.removeStorageSync(USER_INFO_KEY)
+    }
+  }
+
+  async function refreshUserInfoSilently() {
+    try {
+      await fetchUserInfo()
+    } catch (error) {
+      console.warn('[user-store] fetch user info skipped after login', error)
+    }
+  }
+
   // 登录
   async function loginAction(phone: string, password: string) {
     const res = await login({ phone, password })
     if (res.code === 0 && res.data) {
-      token.value = res.data.access_token
-      uni.setStorageSync(TOKEN_KEY, res.data.access_token)
-      await fetchUserInfo()
+      setLoginSession(res.data)
+      await refreshUserInfoSilently()
     }
     return res
   }
@@ -34,9 +65,8 @@ export const useUserStore = defineStore('user', () => {
   async function codeLoginAction(phone: string, code: string) {
     const res = await codeLogin({ phone, code })
     if (res.code === 0 && res.data) {
-      token.value = res.data.access_token
-      uni.setStorageSync(TOKEN_KEY, res.data.access_token)
-      await fetchUserInfo()
+      setLoginSession(res.data)
+      await refreshUserInfoSilently()
     }
     return res
   }
@@ -45,9 +75,8 @@ export const useUserStore = defineStore('user', () => {
   async function registerAction(phone: string, password: string, nickname?: string) {
     const res = await register({ phone, password, nickname })
     if (res.code === 0 && res.data) {
-      token.value = res.data.access_token
-      uni.setStorageSync(TOKEN_KEY, res.data.access_token)
-      await fetchUserInfo()
+      setLoginSession(res.data)
+      await refreshUserInfoSilently()
     }
     return res
   }
@@ -56,9 +85,8 @@ export const useUserStore = defineStore('user', () => {
   async function wechatLoginAction(code: string) {
     const res = await wechatLogin({ code })
     if (res.code === 0 && res.data) {
-      token.value = res.data.access_token
-      uni.setStorageSync(TOKEN_KEY, res.data.access_token)
-      await fetchUserInfo()
+      setLoginSession(res.data)
+      await refreshUserInfoSilently()
     }
     return res
   }
@@ -88,6 +116,10 @@ export const useUserStore = defineStore('user', () => {
     userInfo.value = null
     uni.removeStorageSync(TOKEN_KEY)
     uni.removeStorageSync(USER_INFO_KEY)
+    // 清除家庭和宝宝缓存（直接操作 storage，避免循环依赖）
+    uni.removeStorageSync('baby_bed_family_info_cache')
+    uni.removeStorageSync('baby_bed_baby_list_cache')
+    uni.removeStorageSync('baby_bed_current_baby_cache')
     uni.reLaunch({ url: '/pages/login/login' })
   }
 

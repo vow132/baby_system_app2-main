@@ -226,15 +226,44 @@ function startCodeCountdown() {
   }, 1000)
 }
 
-async function redirectAfterLogin(delay = 1000) {
-  await familyStore.fetchFamilyInfo()
-  setTimeout(() => {
-    if (familyStore.hasFamily) {
-      uni.switchTab({ url: '/pages/index/index' })
-    } else {
-      uni.reLaunch({ url: '/pages/onboarding/index?first=1' })
+function clearAccountScopedCache() {
+  familyStore.clearFamilyState()
+  uni.removeStorageSync('baby_bed_baby_list_cache')
+  uni.removeStorageSync('baby_bed_current_baby_cache')
+}
+
+function goToInitialPage(hasFamily: boolean) {
+  const url = hasFamily ? '/pages/index/index' : '/pages/onboarding/index?first=1'
+  return new Promise<void>((resolve, reject) => {
+    const callbacks = {
+      success: () => resolve(),
+      fail: (err: any) => {
+        console.error('[login] navigate after login failed', { hasFamily, url }, err)
+        reject(err)
+      },
     }
-  }, delay)
+
+    if (hasFamily) {
+      uni.switchTab({ url, ...callbacks })
+    } else {
+      uni.reLaunch({ url, ...callbacks })
+    }
+  })
+}
+
+async function redirectAfterLogin() {
+  clearAccountScopedCache()
+
+  let hasFamily = false
+  try {
+    const familyRes = await familyStore.fetchFamilyInfo()
+    hasFamily = familyRes.code === 0 && !!familyRes.data
+  } catch (error) {
+    console.warn('[login] fetch family after login failed, enter onboarding', error)
+  }
+
+  uni.hideToast()
+  await goToInitialPage(hasFamily)
 }
 
 async function handleLoginSubmit() {
@@ -259,11 +288,12 @@ async function handleLogin() {
   try {
     const res = await userStore.loginAction(loginForm.phone, loginForm.password)
     if (res.code === 0) {
-      uni.showToast({ title: '登录成功', icon: 'success' })
       await redirectAfterLogin()
     } else {
       uni.showToast({ title: res.message || '登录失败', icon: 'none' })
     }
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '登录失败', icon: 'none' })
   } finally {
     loading.value = false
   }
@@ -304,11 +334,12 @@ async function handleCodeLogin() {
   try {
     const res = await userStore.codeLoginAction(loginForm.phone, loginForm.code)
     if (res.code === 0) {
-      uni.showToast({ title: '登录成功', icon: 'success' })
       await redirectAfterLogin()
     } else {
       uni.showToast({ title: res.message || '验证码登录失败', icon: 'none' })
     }
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '验证码登录失败', icon: 'none' })
   } finally {
     loading.value = false
   }
@@ -346,13 +377,12 @@ async function handleWechatLogin() {
     const code = await getWechatCode()
     const res = await userStore.wechatLoginAction(code)
     if (res.code === 0) {
-      uni.showToast({ title: '登录成功', icon: 'success' })
-      await redirectAfterLogin(800)
+      await redirectAfterLogin()
     } else {
       uni.showToast({ title: res.message || '微信登录失败', icon: 'none' })
     }
-  } catch {
-    uni.showToast({ title: '微信登录暂不可用', icon: 'none' })
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '微信登录暂不可用', icon: 'none' })
   } finally {
     loading.value = false
   }
@@ -379,22 +409,21 @@ async function handleRegister() {
     uni.showToast({ title: '两次密码不一致', icon: 'none' })
     return
   }
-  
+
   loading.value = true
   try {
     const res = await userStore.registerAction(
-      registerForm.phone, 
-      registerForm.password, 
+      registerForm.phone,
+      registerForm.password,
       registerForm.nickname
     )
     if (res.code === 0) {
-      uni.showToast({ title: '注册成功', icon: 'success' })
-      setTimeout(() => {
-        uni.reLaunch({ url: '/pages/onboarding/index?first=1' })
-      }, 1000)
+      await redirectAfterLogin()
     } else {
       uni.showToast({ title: res.message || '注册失败', icon: 'none' })
     }
+  } catch (e: any) {
+    uni.showToast({ title: e.message || '注册失败', icon: 'none' })
   } finally {
     loading.value = false
   }

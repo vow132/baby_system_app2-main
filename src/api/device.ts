@@ -5,7 +5,7 @@
  * 硬件端接口保留定义供参考：REGISTER、WIFI_CONFIG、WIFI_STATUS
  * 路径参数：{device_sn}
  */
-import { del, get, post, withQuery } from './request'
+import { del, get, post, put, withQuery } from './request'
 import { API } from './config'
 
 // 设备信息（对齐后端 DeviceInfo）
@@ -110,6 +110,14 @@ export function unbindDevice(data: { device_sn: string }) {
  */
 export function deleteDevice(deviceSn: string) {
   return del(API.DEVICE.DELETE(deviceSn))
+}
+
+/**
+ * 修改设备名称
+ * PUT /api/v1/device/name
+ */
+export function updateDeviceName(deviceSn: string, deviceName: string) {
+  return put(API.DEVICE.UPDATE_NAME, { device_sn: deviceSn, device_name: deviceName })
 }
 
 /**

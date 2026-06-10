@@ -16,6 +16,8 @@ interface RequestOptions {
   header?: Record<string, string>
   showLoading?: boolean
   showError?: boolean
+  /** 登录接口自身返回 401 时不跳转登录页 */
+  ignore401?: boolean
 }
 
 /**
@@ -53,6 +55,7 @@ function extractServerMessage(raw: any): string {
 function responseInterceptor<T>(
   response: UniApp.RequestSuccessCallbackResult,
   showError: boolean,
+  ignore401: boolean,
 ): ApiResponse<T> {
   const data = response.data as ApiResponse<T>
   const serverMessage = extractServerMessage(response.data)
@@ -67,8 +70,11 @@ function responseInterceptor<T>(
   }
 
   if (response.statusCode === 401) {
-    uni.removeStorageSync(TOKEN_KEY)
-    uni.reLaunch({ url: '/pages/login/login' })
+    // 登录接口自身返回 401 时，不跳转登录页，由调用方处理错误提示
+    if (!ignore401) {
+      uni.removeStorageSync(TOKEN_KEY)
+      uni.reLaunch({ url: '/pages/login/login' })
+    }
     throw new Error(serverMessage || '登录已过期，请重新登录')
   }
 
@@ -87,6 +93,7 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
     header = {},
     showLoading = false,
     showError = true,
+    ignore401 = false,
   } = options
 
   if (showLoading) {
@@ -108,7 +115,7 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
       timeout: TIMEOUT,
       success: (res) => {
         try {
-          resolve(responseInterceptor<T>(res, showError))
+          resolve(responseInterceptor<T>(res, showError, ignore401))
         } catch (error) {
           reject(error)
         }
