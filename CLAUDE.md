@@ -92,7 +92,7 @@ src/
 - `pages/my/index.vue` 不展示独立“硬件联动”入口。
 - “设备详情”操作列表不展示“切换宝宝”，该功能与全局宝宝选择重复。
 - 看护页不再展示单独的“预警规则”卡片；心率、呼吸、哭声、姿态四个小卡片分别进入 `pages/monitor/alarm?metric=...` 设置阈值。
-- 成长页不展示“数据记录/历史传感器数据”卡片；`pages/growth/sensor-history` 如存在，仅作为历史路由保留，不作为当前功能入口。
+- 成长页不展示”数据记录/历史传感器数据”卡片；`pages/growth/sensor-history` 的入口从看护页（`pages/monitor/index.vue`）设备状态卡片的”查看历史”进入，不在成长页作为独立卡片。
 
 ## API Layer Pattern
 

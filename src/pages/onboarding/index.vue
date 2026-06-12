@@ -109,6 +109,7 @@
             :show="showBirthPicker"
             v-model="birthDateValue"
             mode="date"
+            :max-date="todayTimestamp"
             @confirm="onBirthConfirm"
             @cancel="showBirthPicker = false"
           />
@@ -277,7 +278,11 @@
 
         <view class="form-group">
           <text class="form-label">朗读文本</text>
-          <u-input v-model="voiceForm.voice_text" placeholder="请填写录音中实际朗读的内容" border="surround" clearable />
+          <u-picker :show="showTextPicker" :columns="voiceTextColumns" keyName="text" @confirm="onVoiceTextConfirm" @cancel="showTextPicker = false" />
+          <view class="picker-trigger" @click="showTextPicker = true">
+            <text>{{ voiceForm.voice_text || '请选择朗读文本' }}</text>
+            <u-icon name="arrow-right" size="14" color="#999" />
+          </view>
         </view>
 
         <view class="record-area">
@@ -500,11 +505,30 @@ const bindForm = ref({ device_sn: '', baby_id: 0 })
 const voiceForm = ref({
   voice_role: 'mom',
   voice_name: '',
-  voice_text: '宝宝乖乖睡觉，爸爸妈妈会一直陪着你，祝你做个甜甜的梦。',
+  voice_text: '乖宝宝快闭眼，妈妈在你身边陪着你哦。',
 })
+
+const showTextPicker = ref(false)
+const voiceTextOptions = [
+  '乖宝宝快闭眼，妈妈在你身边陪着你哦。',
+  '月亮婆婆挂在天上，守护着你进入甜甜的梦乡。',
+  '小宝贝不要害怕，爸爸会一直在这里陪着你。',
+]
+const voiceTextColumns = computed(() => [voiceTextOptions.map(text => ({ text }))])
+const onVoiceTextConfirm = (val: any) => {
+  voiceForm.value.voice_text = val.value[0].text
+  showTextPicker.value = false
+}
 const babyForm = ref({ name: '', gender: 1, birth_date: '' })
 const familyForm = ref({ family_name: '', invite_code: '' })
 const birthDateValue = ref(Date.now())
+
+// 日期选择器最大日期：今天
+const todayTimestamp = (() => {
+  const d = new Date()
+  d.setHours(23, 59, 59, 999)
+  return d.getTime()
+})()
 
 const genderOptions = [
   { label: '男宝', value: 1, icon: 'man' },
@@ -574,8 +598,11 @@ function onBabyConfirm({ value }: any) {
 }
 
 function onBirthConfirm({ value }: any) {
-  const date = new Date(value)
-  babyForm.value.birth_date = date.toISOString().split('T')[0]
+  const d = new Date(value)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  babyForm.value.birth_date = `${y}-${m}-${day}`
   showBirthPicker.value = false
 }
 

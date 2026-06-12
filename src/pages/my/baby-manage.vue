@@ -97,11 +97,11 @@ function getBabyDeviceText(babyId: number) {
 
 function goDeviceForBaby(babyId: number) {
   const device = getBabyDevice(babyId)
-  if (!device) {
-    uni.showToast({ title: '该宝宝尚未绑定设备', icon: 'none' })
-    return
+  if (device) {
+    uni.navigateTo({ url: `/pages/device/detail?sn=${device.device_sn}` })
+  } else {
+    uni.navigateTo({ url: `/pages/device/list?bindBaby=${babyId}` })
   }
-  uni.navigateTo({ url: `/pages/device/detail?sn=${device.device_sn}` })
 }
 
 function goToDetail(id?: number) {

@@ -152,8 +152,10 @@ import { computed, onMounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useBabyStore } from '@/stores'
 import { getSensorData, type SensorData } from '@/api/monitor'
+import { getDeviceList, type DeviceInfo } from '@/api/device'
 
 const babyStore = useBabyStore()
+const devices = ref<DeviceInfo[]>([])
 
 const statusBarHeight = ref(44)
 const startDate = ref('')
@@ -203,8 +205,15 @@ onMounted(() => {
 })
 
 onShow(async () => {
-  await babyStore.fetchBabyList()
+  await Promise.allSettled([babyStore.fetchBabyList(), loadDevices()])
 })
+
+async function loadDevices() {
+  const res = await getDeviceList()
+  if (res.code === 0 && Array.isArray(res.data)) {
+    devices.value = res.data
+  }
+}
 
 function setQuickRange(type: string) {
   quickRange.value = type
@@ -266,7 +275,7 @@ async function fetchData() {
   const baby = babyStore.currentBaby
   if (!baby) return
 
-  const device = babyStore.deviceList?.[0]
+  const device = devices.value[0]
   const deviceSn = device?.device_sn
   if (!deviceSn) return
   const params: any = {

@@ -149,6 +149,7 @@ function editNickname() {
     title: '修改昵称',
     editable: true,
     placeholderText: '请输入新昵称',
+    content: userStore.nickname || '',
     success: async (res) => {
       const nickname = res.content?.trim()
       if (res.confirm && nickname) {

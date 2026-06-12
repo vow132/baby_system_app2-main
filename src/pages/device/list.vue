@@ -121,7 +121,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { bindDevice, getDeviceList, registerDevice, unbindDevice, type DeviceInfo } from '@/api/device'
 import { useBabyStore } from '@/stores'
 import { clearRemovedDevice, getDeviceDisplayName, getLocalRegisteredDevices, getRemovedDeviceSnList, removeLocalRegisteredDevice, upsertLocalRegisteredDevice } from '@/common/deviceLocal'
@@ -159,6 +159,21 @@ onShow(async () => {
   await Promise.allSettled([loadDevices(), babyStore.fetchBabyList()])
 })
 
+onLoad(async (query) => {
+  const bindBabyIdParam = Number(query?.bindBaby)
+  if (!bindBabyIdParam) return
+  // 等待数据加载完毕后，找到第一个未绑定设备并弹出绑定弹窗
+  await Promise.allSettled([loadDevices(), babyStore.fetchBabyList()])
+  const unboundDevice = visibleDeviceList.value.find(d => !d.baby_id)
+  if (!unboundDevice) {
+    uni.showToast({ title: '暂无可绑定设备，请先添加设备', icon: 'none' })
+    return
+  }
+  bindingDevice.value = unboundDevice
+  bindBabyId.value = bindBabyIdParam
+  showBindDevice.value = true
+})
+
 function onPickBaby(event: any) {
   const index = Number(event?.detail?.value ?? 0)
   selectedBabyId.value = index === 0 ? null : babyOptions.value[index - 1]?.value ?? null
@@ -169,6 +184,10 @@ function isSuccessCode(code: number) {
 }
 
 function getDisplayName(device: DeviceInfo) {
+  if (device.baby_id) {
+    const baby = babyStore.babyList.find(b => String(b.id) === String(device.baby_id))
+    if (baby) return baby.name
+  }
   return getDeviceDisplayName(device.device_sn, device.device_name)
 }
 

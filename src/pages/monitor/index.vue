@@ -83,6 +83,10 @@
             <text class="risk-label">{{ riskLabel }}</text>
             <text class="risk-detail">更新于 {{ updateTime }}</text>
           </view>
+          <view class="risk-link" @click.stop="goToSensorHistory">
+            <text class="risk-link-text">历史数据</text>
+            <u-icon name="arrow-right" size="14" color="rgba(0,0,0,.45)" />
+          </view>
         </view>
       </view>
 
@@ -397,6 +401,9 @@ function goToVideo() { uni.navigateTo({ url: '/pages/video/index' }) }
 function goToContent() { uni.navigateTo({ url: '/pages/content/index' }) }
 function goToAlarmRules(metric?: string) {
   uni.navigateTo({ url: `/pages/monitor/alarm${metric ? `?metric=${metric}` : ''}` })
+}
+function goToSensorHistory() {
+  uni.navigateTo({ url: '/pages/growth/sensor-history' })
 }
 function filterByCategory(c: string) { uni.navigateTo({ url: `/pages/monitor/events?category=${c}` }) }
 
@@ -798,6 +805,7 @@ function toggleFull() {
   .risk-main {
     display: flex;
     align-items: center;
+    justify-content: space-between;
   }
 
   .risk-icon {
@@ -828,6 +836,19 @@ function toggleFull() {
       color: #999;
       margin-top: 6rpx;
     }
+  }
+
+  .risk-link {
+    display: flex;
+    align-items: center;
+    gap: 6rpx;
+    margin-left: 16rpx;
+    flex-shrink: 0;
+  }
+
+  .risk-link-text {
+    font-size: 24rpx;
+    color: rgba(0, 0, 0, .45);
   }
 }
 

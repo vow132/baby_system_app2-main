@@ -55,7 +55,7 @@
           <u-icon name="close-circle" size="22" color="#ff4d4f" />
           <text>离开家庭</text>
         </view>
-        <view class="family-action-item danger" v-if="isCurrentAdmin" @click="confirmDissolveFamily">
+        <view class="family-action-item danger" @click="confirmDissolveFamily">
           <u-icon name="trash" size="22" color="#ff4d4f" />
           <text>解散家庭</text>
         </view>
@@ -459,15 +459,10 @@ function confirmTransferAdmin(member: FamilyMember) {
 }
 
 function confirmDissolveFamily() {
-  if (!isCurrentAdmin.value) {
-    uni.showToast({ title: '只有管理员可以解散家庭', icon: 'none' })
-    return
-  }
-
   uni.showModal({
-    title: '解散家庭',
-    content: `解散后「${familyStore.familyName}」将无法继续使用，成员会被移出，家庭下宝宝和设备关系也需要后端一并处理。确定解散吗？`,
-    confirmText: '解散',
+    title: '⚠ 确定解散家庭？',
+    content: '一旦解散将永久删除全部数据',
+    confirmText: '确认解散',
     confirmColor: '#ff4d4f',
     success: async (res) => {
       if (!res.confirm) return

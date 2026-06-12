@@ -41,7 +41,7 @@
         <view class="action-item" @click="handleUpgrade"><u-icon name="arrow-upward" size="40" color="#5677fc" /><text>固件升级</text></view>
         <view class="action-item" @click="handleDiagnose"><u-icon name="checkmark-circle" size="40" color="#19be6b" /><text>设备诊断</text></view>
         <view class="action-item" @click="handleReboot"><u-icon name="reload" size="40" color="#ff9900" /><text>远程重启</text></view>
-        <view class="action-item" @click="showRenamePopup = true"><u-icon name="edit-pen" size="40" color="#5677fc" /><text>设备改名</text></view>
+        <view class="action-item" @click="openRename"><u-icon name="edit-pen" size="40" color="#5677fc" /><text>设备改名</text></view>
         <view class="action-item" @click="unbindCurrentDevice"><u-icon name="minus-circle" size="40" color="#fa3534" /><text>解绑设备</text></view>
         <view class="action-item" @click="deactivateDevice"><u-icon name="close-circle" size="40" color="#fa3534" /><text>删除设备</text></view>
       </view>
@@ -83,8 +83,14 @@ const modes = [
   { label: '拼床', value: 'co_sleep', icon: 'home', color: 'linear-gradient(135deg, #ff9900, #f5a623)', desc: '亲近陪睡', policy: '弱化灯光与声音' },
 ]
 
-// 直接使用数据库中的 device_name
-const displayName = computed(() => device.value?.device_name || deviceSn.value)
+// 优先显示绑定宝宝名，其次数据库中的 device_name
+const displayName = computed(() => {
+  if (device.value?.baby_id) {
+    const baby = babyStore.babyList.find(b => String(b.id) === String(device.value!.baby_id))
+    if (baby) return baby.name
+  }
+  return device.value?.device_name || deviceSn.value
+})
 const firmwareText = computed(() => firmware.value?.current_version || device.value?.firmware_version || '待同步')
 const batteryText = computed(() => {
   if (!battery.value) return '待同步'
@@ -209,6 +215,10 @@ function handleReboot() {
   })
 }
 
+function openRename() {
+  renameValue.value = displayName.value
+  showRenamePopup.value = true
+}
 
 async function saveRename() {
   const name = (renameValue.value || '').trim()
