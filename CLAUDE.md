@@ -91,7 +91,10 @@ src/
 - “硬件联动”不再作为独立页面入口；硬件模式切换和模式策略统一放在 `pages/device/detail.vue` 的“模式切换”区域。
 - `pages/my/index.vue` 不展示独立“硬件联动”入口。
 - “设备详情”操作列表不展示“切换宝宝”，该功能与全局宝宝选择重复。
-- 看护页不再展示单独的“预警规则”卡片；心率、呼吸、哭声、姿态四个小卡片分别进入 `pages/monitor/alarm?metric=...` 设置阈值。
+- 看护页不再展示单独的”预警规则”卡片；心率、呼吸、哭声、姿态四个小卡片分别进入 `pages/monitor/alarm?metric=...` 设置阈值。
+- 看护页和场景联动页的婴儿状态和风险等级由后端 `GET /sensor/status/baby?device_sn=xxx` 接口驱动展示，前端不做本地阈值判断。
+- `App.vue` 内置全局危险轮询：每 10 秒调用 `getBabyStatus`，当 `status_level === 3`（危险）时自动弹窗提醒，点击”查看详情”跳转看护页。
+- 场景联动页精简为被动展示：不再有模拟触发、自动分类、响应动作面板；场景类型由后端 `status_type` + `status_level` 映射。
 - 成长页不展示”数据记录/历史传感器数据”卡片；`pages/growth/sensor-history` 的入口从看护页（`pages/monitor/index.vue`）设备状态卡片的”查看历史”进入，不在成长页作为独立卡片。
 
 ## API Layer Pattern

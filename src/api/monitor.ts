@@ -70,6 +70,23 @@ export interface SceneClassifyResult {
   timestamp: string | null
 }
 
+// ========== 婴儿状态类型 ==========
+
+export interface BabyStatus {
+  status_type: string       // sleeping/awake/playing/crying/danger
+  status_level: number      // 0-3
+  risk_label: string        // 正常/关注/警告/危险
+  started_at: string | null
+  duration_sec: number | null
+  sensor_snapshot: {
+    heart_rate: number | null
+    breath_rate: number | null
+    body_movement: string | null
+    sound_db: number | null
+    pose_status: string | null
+  } | null
+}
+
 // ========== 被动响应类型 ==========
 
 // 被动事件类型
@@ -157,6 +174,14 @@ export function getSensorData(params?: {
   }
   const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : ''
   return get<{ items: SensorData[]; page: number; page_size: number }>(`${API.SENSOR.DATA}${queryString}`, undefined, { showError: false })
+}
+
+/**
+ * 查询婴儿状态及风险等级
+ * GET /api/v1/sensor/status/baby?device_sn=xxx
+ */
+export function getBabyStatus(deviceSn: string) {
+  return get<BabyStatus>(`${API.SENSOR.STATUS_BABY}?device_sn=${encodeURIComponent(deviceSn)}`, undefined, { showError: false })
 }
 
 /**

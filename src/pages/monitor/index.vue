@@ -92,7 +92,7 @@
 
       <!-- 多维监测数据 -->
       <view class="sensor-grid">
-        <view class="sensor-cell" v-for="item in sensorCells" :key="item.label" @click="goToAlarmRules(item.metric)">
+        <view class="sensor-cell" v-for="item in sensorCells" :key="item.label">
           <view class="sensor-icon" :style="{ background: item.bg }">
             <u-icon :name="item.icon" size="22" :color="item.color" />
           </view>
@@ -198,12 +198,12 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { onHide, onShow } from '@dcloudio/uni-app'
 import { useUserStore, useBabyStore } from '@/stores'
-import { getSensorData, getEvents, getPassiveEventTypes, type SensorData, type MonitoringEvent, type PassiveEventType } from '@/api/monitor'
+import { getEvents, getPassiveEventTypes, getBabyStatus, type MonitoringEvent, type PassiveEventType, type BabyStatus } from '@/api/monitor'
 import { getDeviceList, type DeviceInfo } from '@/api/device'
 
 const userStore = useUserStore()
 const babyStore = useBabyStore()
-const sensorData = ref<SensorData | null>(null)
+const babyStatus = ref<BabyStatus | null>(null)
 const events = ref<MonitoringEvent[]>([])
 const eventTypes = ref<PassiveEventType[]>([])
 const deviceList = ref<DeviceInfo[]>([])
@@ -230,36 +230,31 @@ const categories = [
 ]
 
 // 多维传感器数据
-const sensorCells = computed(() => [
-  { label: '心率', metric: 'heart_rate', icon: 'heart-fill', color: '#667eea', bg: '#eef2ff', value: sensorData.value?.heart_rate ?? '--', unit: '次/分' },
-  { label: '呼吸', metric: 'breath_rate', icon: 'volume-fill', color: '#19be6b', bg: '#ecfdf5', value: sensorData.value?.breath_rate ?? '--', unit: '次/分' },
-  { label: '哭声', metric: 'cry_level', icon: 'mic', color: '#ff9900', bg: '#fff7e6', value: getCryStatus(), unit: '', alert: true },
-  { label: '姿态', metric: 'pose_status', icon: 'man-add-fill', color: '#9b59b6', bg: '#f3e8ff', value: getPoseShort(), unit: '' },
-])
+const sensorCells = computed(() => {
+  const snap = babyStatus.value?.sensor_snapshot
+  return [
+    { label: '心率', metric: 'heart_rate', icon: 'heart-fill', color: '#667eea', bg: '#eef2ff', value: snap?.heart_rate ?? '--', unit: '次/分' },
+    { label: '呼吸', metric: 'breath_rate', icon: 'volume-fill', color: '#19be6b', bg: '#ecfdf5', value: snap?.breath_rate ?? '--', unit: '次/分' },
+    { label: '哭声', metric: 'cry_level', icon: 'mic', color: '#ff9900', bg: '#fff7e6', value: getCryStatus(), unit: '', alert: true },
+    { label: '姿态', metric: 'pose_status', icon: 'man-add-fill', color: '#9b59b6', bg: '#f3e8ff', value: getPoseShort(), unit: '' },
+  ]
+})
 
 function getCryStatus(): string {
-  const cryEvent = events.value.find(e => {
-    const t = eventTypes.value.find(et => et.id === e.event_type_id)
-    return t?.category === 'cry'
-  })
-  return cryEvent ? '哭声' : '正常'
+  return babyStatus.value?.status_type === 'crying' ? '哭声' : '正常'
 }
 
 function getPoseShort(): string {
-  const m: Record<string, string> = { lying: '平躺', side: '侧卧', prone: '趴睡', sitting: '坐姿', standing: '站立' }
-  return m[sensorData.value?.pose_status || ''] || '未知'
+  const m: Record<string, string> = { supine: '平躺', prone: '俯卧', left: '左侧卧', right: '右侧卧', sit: '坐姿', lying: '平躺', side: '侧卧', sitting: '坐姿', standing: '站立' }
+  return m[babyStatus.value?.sensor_snapshot?.pose_status || ''] || '未知'
 }
 
 // 风险等级
 const riskLevel = computed(() => {
   if (!deviceOnline.value) return 'offline'
-  const urgentEvents = events.value.filter(e => {
-    const t = eventTypes.value.find(et => et.id === e.event_type_id)
-    return t?.category === 'danger' || (e.event_level ?? 0) >= 4
-  })
-  if (urgentEvents.length) return 'danger'
-  const warnEvents = events.value.filter(e => (e.event_level ?? 0) >= 3)
-  if (warnEvents.length) return 'warning'
+  const level = babyStatus.value?.status_level ?? 0
+  if (level >= 3) return 'danger'
+  if (level >= 2) return 'warning'
   return 'safe'
 })
 
@@ -278,19 +273,19 @@ const riskLabel = computed(() => {
 })
 
 const postureText = computed(() => getPoseShort())
-const osdHeart = computed(() => deviceOnline.value ? (sensorData.value?.heart_rate ?? '--') : '--')
-const osdBreath = computed(() => deviceOnline.value ? (sensorData.value?.breath_rate ?? '--') : '--')
+const osdHeart = computed(() => deviceOnline.value ? (babyStatus.value?.sensor_snapshot?.heart_rate ?? '--') : '--')
+const osdBreath = computed(() => deviceOnline.value ? (babyStatus.value?.sensor_snapshot?.breath_rate ?? '--') : '--')
 const osdPosture = computed(() => deviceOnline.value ? postureText.value : '--')
 const osdSyncTime = computed(() => deviceOnline.value ? updateTime.value : '--:--')
 const isHeartAbnormal = computed(() => {
-  const heart = sensorData.value?.heart_rate
+  const heart = babyStatus.value?.sensor_snapshot?.heart_rate
   return deviceOnline.value && typeof heart === 'number' && (heart < 80 || heart > 180)
 })
 const isBreathAbnormal = computed(() => {
-  const breath = sensorData.value?.breath_rate
+  const breath = babyStatus.value?.sensor_snapshot?.breath_rate
   return deviceOnline.value && typeof breath === 'number' && (breath < 20 || breath > 60)
 })
-const isPostureAbnormal = computed(() => deviceOnline.value && sensorData.value?.pose_status === 'prone')
+const isPostureAbnormal = computed(() => deviceOnline.value && babyStatus.value?.sensor_snapshot?.pose_status === 'prone')
 const videoStatusText = computed(() => {
   if (!deviceOnline.value) return '离线'
   if (riskLevel.value === 'danger') return '紧急'
@@ -358,15 +353,16 @@ async function loadData() {
   const deviceRes = await getDeviceList()
   if (deviceRes.code === 0 && deviceRes.data) deviceList.value = deviceRes.data
 
+  const deviceSn = deviceList.value[0]?.device_sn
   const reqs: any[] = [
     getEvents({ baby_id: babyStore.currentBaby.id, page: 1, page_size: 10 }),
     getPassiveEventTypes(),
   ]
-  if (deviceList.value.length > 0) {
-    reqs.push(getSensorData({ device_sn: deviceList.value[0].device_sn, page: 1, page_size: 1 }))
+  if (deviceSn) {
+    reqs.push(getBabyStatus(deviceSn))
   }
-  const [eventRes, typeRes, sensorRes] = await Promise.all(reqs)
-  if (sensorRes?.code === 0 && sensorRes.data?.items?.length) sensorData.value = sensorRes.data.items[0]
+  const [eventRes, typeRes, statusRes] = await Promise.all(reqs)
+  if (statusRes?.code === 0 && statusRes.data) babyStatus.value = statusRes.data
   if (eventRes.code === 0 && eventRes.data) events.value = eventRes.data.items
   if (typeRes.code === 0 && typeRes.data) eventTypes.value = typeRes.data
 }
@@ -399,9 +395,6 @@ function goToRoutineAdvice() { uni.navigateTo({ url: '/pages/routine/optimize' }
 function goToScene() { uni.navigateTo({ url: '/pages/scene/index' }) }
 function goToVideo() { uni.navigateTo({ url: '/pages/video/index' }) }
 function goToContent() { uni.navigateTo({ url: '/pages/content/index' }) }
-function goToAlarmRules(metric?: string) {
-  uni.navigateTo({ url: `/pages/monitor/alarm${metric ? `?metric=${metric}` : ''}` })
-}
 function goToSensorHistory() {
   uni.navigateTo({ url: '/pages/growth/sensor-history' })
 }

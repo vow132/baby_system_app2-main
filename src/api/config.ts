@@ -120,6 +120,7 @@ export const API = {
     FUSION: '/sensor/fusion',                           // POST 多模态数据融合分析（小程序）
     SCENE_CLASSIFY: '/sensor/scene/classify',           // GET 场景分类识别（小程序）
     SCENE_RESPONSE: '/sensor/scene/response',           // POST 执行场景响应脚本（小程序）
+    STATUS_BABY: '/sensor/status/baby',                // GET 查询婴儿状态及风险等级（小程序）
   },
 
   // ========== 被动响应模块（5个：4小程序+1共用） ==========

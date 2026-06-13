@@ -1,22 +1,65 @@
 <script lang="ts">
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
 import { useUserStore } from './stores/user'
+import { getDeviceList } from './api/device'
+import { getBabyStatus } from './api/monitor'
+
+let statusTimer: ReturnType<typeof setInterval> | null = null
+let lastAlertLevel = -1
+
+async function startDangerPolling() {
+  if (statusTimer) return
+  try {
+    const res = await getDeviceList()
+    const devices = (res.code === 0 && Array.isArray(res.data)) ? res.data : []
+    const deviceSn = devices[0]?.device_sn
+    if (!deviceSn) return
+    statusTimer = setInterval(async () => {
+      const statusRes = await getBabyStatus(deviceSn)
+      const level = statusRes?.data?.status_level ?? 0
+      if (level === 3 && lastAlertLevel !== 3) {
+        const snap = statusRes.data?.sensor_snapshot
+        const content = [
+          statusRes.data?.risk_label ? `风险等级：${statusRes.data.risk_label}` : '',
+          snap?.heart_rate != null ? `心率：${snap.heart_rate} 次/分` : '',
+          snap?.breath_rate != null ? `呼吸：${snap.breath_rate} 次/分` : '',
+        ].filter(Boolean).join('\n') || '宝宝当前处于危险状态，请立即查看'
+        uni.showModal({
+          title: '⚠ 危险警报',
+          content,
+          confirmText: '查看详情',
+          cancelText: '知道了',
+          success(r) {
+            if (r.confirm) uni.navigateTo({ url: '/pages/monitor/index' })
+          },
+        })
+      }
+      lastAlertLevel = level
+    }, 10000)
+  } catch (_) {}
+}
+
+function stopDangerPolling() {
+  if (statusTimer) { clearInterval(statusTimer); statusTimer = null }
+}
 
 export default {
   onLaunch() {
     console.log('App Launch')
-    
-    // 检查登录状态
     const userStore = useUserStore()
     if (userStore.isLoggedIn) {
       userStore.fetchUserInfo()
+      startDangerPolling()
     }
   },
   onShow() {
     console.log('App Show')
+    const userStore = useUserStore()
+    if (userStore.isLoggedIn && !statusTimer) startDangerPolling()
   },
   onHide() {
     console.log('App Hide')
+    stopDangerPolling()
   },
 }
 </script>
