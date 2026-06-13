@@ -96,6 +96,10 @@ src/
 - `App.vue` 内置全局危险轮询：每 10 秒调用 `getBabyStatus`，当 `status_level === 3`（危险）时自动弹窗提醒，点击”查看详情”跳转看护页。
 - 场景联动页精简为被动展示：不再有模拟触发、自动分类、响应动作面板；场景类型由后端 `status_type` + `status_level` 映射。
 - 成长页不展示”数据记录/历史传感器数据”卡片；`pages/growth/sensor-history` 的入口从看护页（`pages/monitor/index.vue`）设备状态卡片的”查看历史”进入，不在成长页作为独立卡片。
+- 宝宝年龄统一使用”xx月xx天”精确格式显示（`src/utils/age.ts`），不使用纯月数。
+- 设备列表和设备详情的大字标题优先显示 `device_name`（设备自身名称），不使用宝宝名；绑定宝宝信息在”已绑定”蓝色小字中单独展示。
+- 所有名称输入框统一限制字符数：用户昵称 20、宝宝昵称 12、家庭名称 16、设备名称 20、音色名称 16。
+- 事件记录页事件类型用 `event_type` 字符串匹配 `event_code`（后端 `GET /sensor/events` 返回 `event_type` 字段，无 `event_type_id`）。
 
 ## API Layer Pattern
 

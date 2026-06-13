@@ -49,6 +49,7 @@
 <script setup lang="ts">
 import { onShow } from '@dcloudio/uni-app'
 import { useBabyStore } from '@/stores'
+import { formatBabyAge } from '@/utils/age'
 
 const babyStore = useBabyStore()
 const loading = ref(false)
@@ -67,26 +68,7 @@ function getGenderText(gender: number | null) {
 }
 
 function getAgeText(baby: any) {
-  if (baby.current_age_months) {
-    const years = Math.floor(baby.current_age_months / 12)
-    const months = baby.current_age_months % 12
-    if (years > 0) {
-      return `${years}岁${months}个月`
-    }
-    return `${months}个月`
-  }
-  if (baby.birth_date) {
-    const birth = new Date(baby.birth_date)
-    const now = new Date()
-    const months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth())
-    const years = Math.floor(months / 12)
-    const remainingMonths = months % 12
-    if (years > 0) {
-      return `${years}岁${remainingMonths}个月`
-    }
-    return `${remainingMonths}个月`
-  }
-  return '年龄未知'
+  return formatBabyAge(baby)
 }
 
 function formatBirthDate(date: string) {

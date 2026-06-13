@@ -2,7 +2,7 @@
   <view class="baby-detail-page">
     <u-form :model="form" ref="formRef" labelPosition="left" labelWidth="160">
       <u-form-item label="宝宝昵称" prop="name" required>
-        <u-input v-model="form.name" placeholder="请输入宝宝昵称" />
+        <u-input v-model="form.name" placeholder="请输入宝宝昵称" maxlength="12" />
       </u-form-item>
       <u-form-item label="性别" prop="gender">
         <u-radio-group v-model="form.gender">

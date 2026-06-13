@@ -52,7 +52,7 @@
         <view v-if="familyMode === 'create'">
           <view class="form-group">
             <text class="form-label">家庭名称</text>
-            <u-input v-model="familyForm.family_name" placeholder="如：我的家庭" border="surround" clearable />
+            <u-input v-model="familyForm.family_name" placeholder="如：我的家庭" border="surround" clearable maxlength="16" />
           </view>
           <u-button type="primary" text="创建家庭" :loading="familyLoading" @click="createFamily" block />
         </view>
@@ -90,7 +90,7 @@
 
         <view class="form-group">
           <text class="form-label">宝宝昵称</text>
-          <u-input v-model="babyForm.name" placeholder="如：小宝贝" border="surround" clearable />
+          <u-input v-model="babyForm.name" placeholder="如：小宝贝" border="surround" clearable maxlength="12" />
         </view>
 
         <view class="form-group">
@@ -273,7 +273,7 @@
 
         <view class="form-group">
           <text class="form-label">音色名称</text>
-          <u-input v-model="voiceForm.voice_name" placeholder="如：妈妈的声音" border="surround" clearable />
+          <u-input v-model="voiceForm.voice_name" placeholder="如：妈妈的声音" border="surround" clearable maxlength="16" />
         </view>
 
         <view class="form-group">
@@ -385,6 +385,7 @@ import { post } from '@/api/request'
 import { API, SPEECH_BASE_URL } from '@/api/config'
 import { getDeviceList, type DeviceInfo } from '@/api/device'
 import { cloneVoiceLibrary } from '@/services/voice'
+import { formatBabyAge } from '@/utils/age'
 
 const babyStore = useBabyStore()
 const familyStore = useFamilyStore()
@@ -541,12 +542,8 @@ const activeBaby = computed(() => shouldUseExistingBaby.value ? babyStore.curren
 const currentBabyAgeText = computed(() => {
   const baby = activeBaby.value
   if (!baby) return ''
-  if (baby.current_age_months != null) return `${baby.current_age_months}个月`
-  if (!baby.birth_date) return '月龄待补充'
-  const birth = new Date(baby.birth_date)
-  const now = new Date()
-  const months = Math.max(0, (now.getFullYear() - birth.getFullYear()) * 12 + now.getMonth() - birth.getMonth())
-  return `${months}个月`
+  const age = formatBabyAge(baby)
+  return age === '年龄未知' ? '月龄待补充' : age
 })
 
 const doneTitle = computed(() => {

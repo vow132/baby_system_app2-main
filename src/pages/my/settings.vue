@@ -152,17 +152,20 @@ function editNickname() {
     content: userStore.nickname || '',
     success: async (res) => {
       const nickname = res.content?.trim()
-      if (res.confirm && nickname) {
-        try {
-          const result = await userStore.updateUserInfoAction({ nickname })
-          if (result.code === 0) {
-            uni.showToast({ title: '修改成功', icon: 'success' })
-          } else {
-            uni.showToast({ title: result.message || '修改失败', icon: 'none' })
-          }
-        } catch (error: any) {
-          uni.showToast({ title: error.message || '修改失败', icon: 'none' })
+      if (!res.confirm || !nickname) return
+      if (nickname.length > 20) {
+        uni.showToast({ title: '昵称不能超过20个字符', icon: 'none' })
+        return
+      }
+      try {
+        const result = await userStore.updateUserInfoAction({ nickname })
+        if (result.code === 0) {
+          uni.showToast({ title: '修改成功', icon: 'success' })
+        } else {
+          uni.showToast({ title: result.message || '修改失败', icon: 'none' })
         }
+      } catch (error: any) {
+        uni.showToast({ title: error.message || '修改失败', icon: 'none' })
       }
     }
   })

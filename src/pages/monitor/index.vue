@@ -199,6 +199,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { onHide, onShow } from '@dcloudio/uni-app'
 import { useUserStore, useBabyStore } from '@/stores'
 import { getEvents, getPassiveEventTypes, getBabyStatus, type MonitoringEvent, type PassiveEventType, type BabyStatus } from '@/api/monitor'
+import { formatBabyAge } from '@/utils/age'
 import { getDeviceList, type DeviceInfo } from '@/api/device'
 
 const userStore = useUserStore()
@@ -216,9 +217,7 @@ const deviceOnline = computed(() => deviceList.value.some(d => d.online_status))
 // 当前宝宝信息
 const currentBabyName = computed(() => babyStore.currentBaby?.name || '选择宝宝')
 const currentBabyStatus = computed(() => {
-  if (!babyStore.currentBaby) return ''
-  const month = babyStore.currentBaby.current_age_months
-  return month ? `${month}个月` : ''
+  return formatBabyAge(babyStore.currentBaby)
 })
 
 const categories = [
@@ -409,7 +408,7 @@ function showBabySwitcher() {
     }
     return
   }
-  const itemList = babies.map(baby => `${baby.name}${baby.current_age_months ? ` (${baby.current_age_months}个月)` : ''}`)
+  const itemList = babies.map(baby => `${baby.name}${baby.birth_date ? ` (${formatBabyAge(baby)})` : ''}`)
   uni.showActionSheet({
     itemList,
     success: (res) => {

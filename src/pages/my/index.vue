@@ -118,6 +118,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useUserStore, useFamilyStore, useBabyStore } from '@/stores'
+import { formatBabyAge } from '@/utils/age'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
@@ -187,7 +188,7 @@ function goToCurrentBaby() {
   const babies = babyStore.babyList
   // 如果有多个宝宝，弹出选择器
   if (babies.length > 1) {
-    const itemList = babies.map(baby => `${baby.name}${baby.current_age_months ? ` (${baby.current_age_months}个月)` : ''}`)
+    const itemList = babies.map(baby => `${baby.name}${baby.birth_date ? ` (${formatBabyAge(baby)})` : ''}`)
     uni.showActionSheet({
       itemList,
       success: (res) => {

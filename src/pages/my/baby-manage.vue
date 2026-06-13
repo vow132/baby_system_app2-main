@@ -48,6 +48,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { useBabyStore } from '@/stores'
 import { getDeviceList, type DeviceInfo } from '@/api/device'
 import { getDeviceDisplayName, isRemovedDevice } from '@/common/deviceLocal'
+import { formatBabyAge } from '@/utils/age'
 
 const babyStore = useBabyStore()
 const devices = ref<DeviceInfo[]>([])
@@ -64,20 +65,7 @@ async function loadDevices() {
 }
 
 function getAgeText(baby: any) {
-  if (baby.current_age_months != null) {
-    const years = Math.floor(baby.current_age_months / 12)
-    const months = baby.current_age_months % 12
-    return years > 0 ? `${years}岁${months}个月` : `${months}个月`
-  }
-  if (baby.birth_date) {
-    const birth = new Date(baby.birth_date)
-    const now = new Date()
-    const months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth())
-    const years = Math.floor(months / 12)
-    const rest = months % 12
-    return years > 0 ? `${years}岁${rest}个月` : `${rest}个月`
-  }
-  return '年龄未知'
+  return formatBabyAge(baby)
 }
 
 function formatBirthDate(date: string) {

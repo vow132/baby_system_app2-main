@@ -5,13 +5,13 @@
     </view>
     
     <view class="event-list">
-      <view class="event-item" v-for="event in events" :key="event.id" @click="goToDetail(event.id)">
+      <view class="event-item" v-for="event in filteredEvents" :key="event.id" @click="goToDetail(event.id)">
         <view class="event-left">
           <view class="level-badge" :class="getLevelClass(event.event_level)">
             {{ getLevelText(event.event_level) }}
           </view>
           <view class="event-info">
-            <text class="event-type">事件类型: {{ event.event_type_id }}</text>
+            <text class="event-type">{{ getEventName(event.event_type) }}</text>
             <text class="event-time">{{ formatDateTime(event.detected_at) }}</text>
           </view>
         </view>
@@ -48,6 +48,16 @@ const pageSize = 20
 const hasMore = ref(true)
 const currentCategory = ref(0)
 const categoryFilter = ref<string | null>(null)
+
+// event_type → 中文分类映射
+const typeToCategory: Record<string, string> = {
+  sleeping: '睡眠', awake: '清醒', playing: '玩耍', crying: '哭闹', danger: '危险',
+}
+
+const filteredEvents = computed(() => {
+  if (!categoryFilter.value) return events.value
+  return events.value.filter(e => typeToCategory[e.event_type || ''] === categoryFilter.value)
+})
 
 const categoryTabs = [
   { name: '全部' },
@@ -107,12 +117,25 @@ async function loadEvents() {
   }
 }
 
-function onCategoryChange(index: number) {
-  currentCategory.value = index
-  categoryFilter.value = index === 0 ? null : categoryTabs[index].name
+function onCategoryChange(item: any) {
+  const idx = typeof item === 'number' ? item : item.index ?? 0
+  currentCategory.value = idx
+  categoryFilter.value = idx === 0 ? null : categoryTabs[idx].name
   page.value = 1
   hasMore.value = true
   loadEvents()
+}
+
+function getEventName(eventType: string | null) {
+  const map: Record<string, string> = {
+    sleeping: '睡眠', awake: '清醒', playing: '玩耍', crying: '哭闹', danger: '危险',
+    deep_sleep: '熟睡', side_prone_sleep: '侧睡趴睡', just_woke: '刚睡醒',
+    sit_up: '坐起', roll_over: '翻身', stand_up: '站立', happy_play: '高兴玩耍',
+    cry: '哭闹', cry_level1: '哭闹1级', cry_level2: '哭闹2级', cry_level3: '哭闹3级',
+    danger_action: '危险动作', apnea: '呼吸暂停', near_bed_edge: '靠近床边',
+    climb_over: '翻床', body_outside: '探出床外', stand_danger: '站立危险',
+  }
+  return map[eventType || ''] || eventType || '未知'
 }
 
 function getLevelText(level: number | null) {

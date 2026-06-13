@@ -51,7 +51,7 @@
     <u-popup :show="showRenamePopup" mode="center" round="16" @close="showRenamePopup = false">
       <view class="rename-popup">
         <text class="rename-title">设备改名</text>
-        <u-input v-model="renameValue" placeholder="请输入新的设备名称" border="surround" />
+        <u-input v-model="renameValue" placeholder="请输入新的设备名称" border="surround" maxlength="20" />
         <view class="popup-actions">
           <u-button text="取消" shape="circle" @click="showRenamePopup = false" />
           <u-button type="primary" text="保存" shape="circle" @click="saveRename" />
@@ -83,12 +83,8 @@ const modes = [
   { label: '拼床', value: 'co_sleep', icon: 'home', color: 'linear-gradient(135deg, #ff9900, #f5a623)', desc: '亲近陪睡', policy: '弱化灯光与声音' },
 ]
 
-// 优先显示绑定宝宝名，其次数据库中的 device_name
+// 优先显示设备名称
 const displayName = computed(() => {
-  if (device.value?.baby_id) {
-    const baby = babyStore.babyList.find(b => String(b.id) === String(device.value!.baby_id))
-    if (baby) return baby.name
-  }
   return device.value?.device_name || deviceSn.value
 })
 const firmwareText = computed(() => firmware.value?.current_version || device.value?.firmware_version || '待同步')
@@ -140,7 +136,7 @@ async function loadDevice() {
     // 如果 getDeviceStatus 没返回 baby_id，从列表中补充
     const listDevice = listRes.value.data.find((item: DeviceInfo) => item.device_sn === deviceSn.value)
     if (listDevice && device.value) {
-      device.value = { ...device.value, baby_id: listDevice.baby_id }
+      device.value = { ...device.value, baby_id: listDevice.baby_id, device_name: device.value.device_name || listDevice.device_name }
     }
   }
 

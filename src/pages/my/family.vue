@@ -93,7 +93,7 @@
     <u-popup :show="showCreateFamily" mode="center" round="16" @close="showCreateFamily = false">
       <view class="popup-form">
         <text class="popup-title">创建家庭</text>
-        <u-input v-model="newFamilyName" placeholder="请输入家庭名称" />
+        <u-input v-model="newFamilyName" placeholder="请输入家庭名称" maxlength="16" />
         <view class="popup-btns">
           <u-button text="取消" @click="showCreateFamily = false" />
           <u-button type="primary" text="创建" @click="handleCreateFamily" :loading="loading" />
@@ -128,7 +128,7 @@
     <u-popup :show="showEditFamily" mode="center" round="16" @close="showEditFamily = false">
       <view class="popup-form">
         <text class="popup-title">修改家庭名称</text>
-        <u-input v-model="editFamilyName" placeholder="请输入家庭名称" />
+        <u-input v-model="editFamilyName" placeholder="请输入家庭名称" maxlength="16" />
         <view class="popup-btns">
           <u-button text="取消" @click="showEditFamily = false" />
           <u-button type="primary" text="保存" @click="handleUpdateFamilyName" :loading="loading" />
@@ -559,6 +559,10 @@ function editSelfNickname() {
     success: async (res) => {
       const nickname = res.content?.trim()
       if (!res.confirm || !nickname) return
+      if (nickname.length > 20) {
+        uni.showToast({ title: '昵称不能超过20个字符', icon: 'none' })
+        return
+      }
 
       try {
         loading.value = true

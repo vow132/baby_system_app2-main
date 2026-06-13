@@ -168,26 +168,26 @@ interface HistoryItem {
 
 // ====== 兜底数据（后端不可用时使用） ======
 const fallbackCategories: CategoryEntry[] = [
-  { key: "sleep", name: "熟睡", note: "记录", icon: "moon-fill" },
-  { key: "wake", name: "苏醒", note: "建议", icon: "sun-fill" },
-  { key: "cry", name: "哭闹", note: "分级", icon: "volume-fill" },
-  { key: "danger", name: "危险动作", note: "告警", icon: "warning-fill" },
-  { key: "happy", name: "高兴玩耍", note: "留存", icon: "heart-fill" },
+  { key: "sleep", name: "熟睡", note: "记录", icon: "moon" },
+  { key: "wake", name: "苏醒", note: "建议", icon: "sun" },
+  { key: "cry", name: "哭闹", note: "分级", icon: "volume-up" },
+  { key: "danger", name: "危险动作", note: "告警", icon: "warning" },
+  { key: "happy", name: "高兴玩耍", note: "留存", icon: "heart" },
 ]
 
 const fallbackScenes: SceneItem[] = [
-  { key: "sleep", category: "sleep", name: "熟睡", icon: "moon-fill", levelKey: "silent", levelText: "静默", status: "安静睡眠中", trigger: "呼吸稳定，位移小，环境低噪声", notice: "次日报告", vitals: { heart: "--", breath: "--", pose: "--" } },
-  { key: "wake", category: "wake", name: "苏醒", icon: "sun-fill", levelKey: "normal", levelText: "建议", status: "宝宝醒啦", trigger: "睁眼，伸展，轻微哼声", notice: "推送：宝宝醒啦", vitals: { heart: "--", breath: "--", pose: "--" } },
-  { key: "cry1", category: "cry", name: "哭闹1级", icon: "volume", levelKey: "silent", levelText: "静默", status: "轻微哼唧", trigger: "40-55dB，体征平稳", notice: "静默提示，可先观察", vitals: { heart: "--", breath: "--", pose: "--" } },
-  { key: "cry2", category: "cry", name: "哭闹2级", icon: "volume-fill", levelKey: "normal", levelText: "建议", status: "有明确需求", trigger: "55-70dB，伴随动作", notice: "标准推送弹窗 + 一键通话", vitals: { heart: "--", breath: "--", pose: "--" } },
-  { key: "cry3", category: "cry", name: "哭闹3级", icon: "error-circle-fill", levelKey: "urgent", levelText: "高优先", status: "持续大哭", trigger: ">75dB，心率上升", notice: "强震动 + 强制弹窗", vitals: { heart: "--", breath: "--", pose: "--" } },
-  { key: "danger_apnea", category: "danger", name: "呼吸暂停", icon: "warning-fill", levelKey: "emergency", levelText: "紧急", status: "立即介入", trigger: "呼吸<10次/分，心率异常", notice: "最高级告警 + 拨打紧急联系人", vitals: { heart: "--", breath: "--", pose: "--" } },
-  { key: "danger_roll", category: "danger", name: "床边翻身", icon: "warning-fill", levelKey: "emergency", levelText: "紧急", status: "坠床风险", trigger: "床边区域翻身角度过大", notice: "坠床风险预警推送", vitals: { heart: "--", breath: "--", pose: "--" } },
-  { key: "danger_climb", category: "danger", name: "翻床", icon: "warning-fill", levelKey: "emergency", levelText: "紧急", status: "翻越风险", trigger: "躯干高度超过围栏阈值", notice: "瞬时视频推送 + 保存录像", vitals: { heart: "--", breath: "--", pose: "--" } },
-  { key: "danger_reach", category: "danger", name: "探出床外", icon: "warning-fill", levelKey: "emergency", levelText: "紧急", status: "身体越界", trigger: "头部或上半身投影越界", notice: "紧急弹窗 + 开启麦克风远程喊话", vitals: { heart: "--", breath: "--", pose: "--" } },
+  { key: "sleep", category: "sleep", name: "熟睡", icon: "moon", levelKey: "silent", levelText: "静默", status: "安静睡眠中", trigger: "呼吸稳定，位移小，环境低噪声", notice: "次日报告", vitals: { heart: "--", breath: "--", pose: "--" } },
+  { key: "wake", category: "wake", name: "苏醒", icon: "sun", levelKey: "normal", levelText: "建议", status: "宝宝醒啦", trigger: "睁眼，伸展，轻微哼声", notice: "推送：宝宝醒啦", vitals: { heart: "--", breath: "--", pose: "--" } },
+  { key: "cry1", category: "cry", name: "哭闹1级", icon: "volume-up", levelKey: "silent", levelText: "静默", status: "轻微哼唧", trigger: "40-55dB，体征平稳", notice: "静默提示，可先观察", vitals: { heart: "--", breath: "--", pose: "--" } },
+  { key: "cry2", category: "cry", name: "哭闹2级", icon: "volume-up", levelKey: "normal", levelText: "建议", status: "有明确需求", trigger: "55-70dB，伴随动作", notice: "标准推送弹窗 + 一键通话", vitals: { heart: "--", breath: "--", pose: "--" } },
+  { key: "cry3", category: "cry", name: "哭闹3级", icon: "info-circle", levelKey: "urgent", levelText: "高优先", status: "持续大哭", trigger: ">75dB，心率上升", notice: "强震动 + 强制弹窗", vitals: { heart: "--", breath: "--", pose: "--" } },
+  { key: "danger_apnea", category: "danger", name: "呼吸暂停", icon: "warning", levelKey: "emergency", levelText: "紧急", status: "立即介入", trigger: "呼吸<10次/分，心率异常", notice: "最高级告警 + 拨打紧急联系人", vitals: { heart: "--", breath: "--", pose: "--" } },
+  { key: "danger_roll", category: "danger", name: "床边翻身", icon: "warning", levelKey: "emergency", levelText: "紧急", status: "坠床风险", trigger: "床边区域翻身角度过大", notice: "坠床风险预警推送", vitals: { heart: "--", breath: "--", pose: "--" } },
+  { key: "danger_climb", category: "danger", name: "翻床", icon: "warning", levelKey: "emergency", levelText: "紧急", status: "翻越风险", trigger: "躯干高度超过围栏阈值", notice: "瞬时视频推送 + 保存录像", vitals: { heart: "--", breath: "--", pose: "--" } },
+  { key: "danger_reach", category: "danger", name: "探出床外", icon: "warning", levelKey: "emergency", levelText: "紧急", status: "身体越界", trigger: "头部或上半身投影越界", notice: "紧急弹窗 + 开启麦克风远程喊话", vitals: { heart: "--", breath: "--", pose: "--" } },
   { key: "danger_stand", category: "danger", name: "站立", icon: "warning", levelKey: "urgent", levelText: "关注", status: "注意防跌", trigger: "坐卧转站立，头高超阈值", notice: "推送提醒 + 建议调低床垫", vitals: { heart: "--", breath: "--", pose: "--" } },
-  { key: "happy_smile", category: "happy", name: "互动表情", icon: "heart-fill", levelKey: "silent", levelText: "记录", status: "捕捉到笑容", trigger: "微笑持续并伴随笑声", notice: "静默记录快乐心情", vitals: { heart: "--", breath: "--", pose: "--" } },
-  { key: "happy_milestone", category: "happy", name: "里程碑", icon: "photo-fill", levelKey: "silent", levelText: "记录", status: "里程碑动作", trigger: "翻身/独坐/精准抓握达阈值", notice: "解锁新成就卡片", vitals: { heart: "--", breath: "--", pose: "--" } },
+  { key: "happy_smile", category: "happy", name: "互动表情", icon: "heart", levelKey: "silent", levelText: "记录", status: "捕捉到笑容", trigger: "微笑持续并伴随笑声", notice: "静默记录快乐心情", vitals: { heart: "--", breath: "--", pose: "--" } },
+  { key: "happy_milestone", category: "happy", name: "里程碑", icon: "star", levelKey: "silent", levelText: "记录", status: "里程碑动作", trigger: "翻身/独坐/精准抓握达阈值", notice: "解锁新成就卡片", vitals: { heart: "--", breath: "--", pose: "--" } },
 ]
 
 // status_type + status_level → scene key 映射
@@ -565,6 +565,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
   position: relative;
   box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.3);
 }
@@ -778,13 +779,14 @@ onBeforeUnmount(() => {
 }
 
 .category-icon {
-  width: 56rpx;
-  height: 56rpx;
+  width: 64rpx;
+  height: 64rpx;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.15);
+  overflow: hidden;
 }
 
 .category-icon.sleep { background: linear-gradient(135deg, #818cf8, #6366f1); }

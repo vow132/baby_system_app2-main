@@ -65,7 +65,7 @@
               <text v-if="deviceSnError" class="form-error">{{ deviceSnError }}</text>
             </u-form-item>
             <u-form-item label="设备名称" required borderBottom>
-              <u-input v-model="deviceForm.device_name" placeholder="例如：三毛的婴儿床" border="none" />
+              <u-input v-model="deviceForm.device_name" placeholder="例如：三毛的婴儿床" border="none" maxlength="20" />
               <text v-if="deviceNameError" class="form-error">{{ deviceNameError }}</text>
             </u-form-item>
             <u-form-item label="设备型号" borderBottom>
@@ -184,11 +184,7 @@ function isSuccessCode(code: number) {
 }
 
 function getDisplayName(device: DeviceInfo) {
-  if (device.baby_id) {
-    const baby = babyStore.babyList.find(b => String(b.id) === String(device.baby_id))
-    if (baby) return baby.name
-  }
-  return getDeviceDisplayName(device.device_sn, device.device_name)
+  return device.device_name || getDeviceDisplayName(device.device_sn, device.device_name)
 }
 
 function getBindBabyText(babyId: number | null) {

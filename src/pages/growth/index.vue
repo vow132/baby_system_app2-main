@@ -122,6 +122,7 @@ import { computed, onMounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useBabyStore } from '@/stores'
 import type { BabyInfo } from '@/api/baby'
+import { formatBabyAge } from '@/utils/age'
 
 const babyStore = useBabyStore()
 const statusBarHeight = ref(44)
@@ -181,7 +182,7 @@ const featureCards = [
 const babyName = computed(() => babyStore.currentBaby?.name || '小宝贝')
 const babyAvatar = computed(() => babyStore.currentBaby?.avatar_url || '/static/logo.png')
 const ageMonth = computed(() => babyStore.currentBaby?.current_age_months ?? 11)
-const ageText = computed(() => `${ageMonth.value}个月`)
+const ageText = computed(() => formatBabyAge(babyStore.currentBaby))
 const stageText = computed(() => {
   const month = ageMonth.value
   if (month <= 3) return '0-3月龄'
@@ -210,8 +211,7 @@ function selectBaby(baby: BabyInfo) {
 }
 
 function getBabyAgeText(baby: BabyInfo) {
-  const month = baby.current_age_months ?? calcAgeMonth(baby.birth_date)
-  return month > 0 ? `${month}个月` : '月龄待完善'
+  return formatBabyAge(baby)
 }
 
 function calcAgeMonth(birthDate?: string | null) {

@@ -91,7 +91,7 @@
         </view>
         <view class="action-item" @click="goToContent">
           <view class="action-icon" style="background: linear-gradient(135deg, #19be6b, #0e9c5a);">
-            <u-icon name="music-fill" size="24" color="#fff" />
+            <u-icon name="play-right-fill" size="24" color="#fff" />
           </view>
           <text class="action-label">播放内容</text>
         </view>
@@ -103,7 +103,7 @@
         </view>
         <view class="action-item" @click="goToAI">
           <view class="action-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">
-            <u-icon name="mic-fill" size="24" color="#fff" />
+            <u-icon name="chat-fill" size="24" color="#fff" />
           </view>
           <text class="action-label">AI陪伴</text>
         </view>
@@ -157,7 +157,7 @@
           <view class="event-row" v-for="event in events.slice(0, 4)" :key="event.id" @click="goToEventDetail(event.id)">
             <view class="event-dot" :class="getLevelClass(event.event_level)" />
             <view class="event-body">
-              <text class="event-type">{{ getEventTypeName(event.event_type_id) }}</text>
+              <text class="event-type">{{ getEventTypeName(event.event_type) }}</text>
               <text class="event-time">{{ formatTime(event.detected_at) }}</text>
             </view>
             <u-icon name="arrow-right" size="14" color="#ddd" />
@@ -440,8 +440,8 @@ async function loadRecentMoments() {
   }
 }
 
-function getEventTypeName(typeId: number | null) {
-  return eventTypes.value.find(t => t.id === typeId)?.event_name || '未知事件'
+function getEventTypeName(eventType: string | null) {
+  return eventTypes.value.find(t => t.event_code === eventType)?.event_name || eventType || '未知事件'
 }
 
 function getLevelClass(level: number | null) {
@@ -855,6 +855,7 @@ function goToOnboarding() { uni.navigateTo({ url: '/pages/onboarding/index' }) }
     justify-content: center;
     margin-bottom: 14rpx;
     box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.08);
+    overflow: hidden;
   }
 
   .action-label {
