@@ -330,7 +330,7 @@ function normalizeChats(data: any): ArchiveItem[] {
     summary: item.content_text || item.content || item.reply_text || '一次家庭语音互动记录',
     time: item.created_at || item.chat_time || new Date().toISOString(),
     tags: ['对话', ...(item.is_ltm_stored ? ['已入档'] : [])],
-    icon: 'mic-fill',
+    icon: 'mic',
   }))
 }
 

@@ -64,7 +64,7 @@
           :key="baby.id"
           @click="selectBaby(baby)"
         >
-          <image class="chip-avatar" :src="baby.avatar_url || '/static/logo.png'" mode="aspectFill" />
+          <image class="chip-avatar" :src="resolveMediaUrl(baby.avatar_url, DEFAULT_AVATAR_URL)" mode="aspectFill" />
           <text>{{ baby.name }}</text>
         </view>
       </scroll-view>
@@ -91,7 +91,7 @@
         </view>
         <view class="action-item" @click="goToContent">
           <view class="action-icon" style="background: linear-gradient(135deg, #19be6b, #0e9c5a);">
-            <u-icon name="play-right-fill" size="24" color="#fff" />
+            <u-icon name="play-circle-fill" size="24" color="#fff" />
           </view>
           <text class="action-label">播放内容</text>
         </view>
@@ -103,7 +103,7 @@
         </view>
         <view class="action-item" @click="goToAI">
           <view class="action-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">
-            <u-icon name="chat-fill" size="24" color="#fff" />
+            <u-icon name="mic" size="24" color="#fff" />
           </view>
           <text class="action-label">AI陪伴</text>
         </view>
@@ -177,7 +177,7 @@
         </view>
         <view v-if="recentMoments.length > 0" class="moment-strip">
           <view class="moment-tile" v-for="item in recentMoments.slice(0, 3)" :key="item.id" @click="goToMoment">
-            <image v-if="item.thumbnail_url || item.media_url" class="moment-thumb" :src="item.thumbnail_url || item.media_url" mode="aspectFill" />
+            <image v-if="item.thumbnail_url || item.media_url" class="moment-thumb" :src="resolveMediaUrl(item.thumbnail_url || item.media_url, DEFAULT_AVATAR_URL)" mode="aspectFill" />
             <view v-else class="moment-placeholder">
               <u-icon name="camera" size="24" color="#f43f5e" />
             </view>
@@ -210,6 +210,7 @@ import { getDeviceList, type DeviceInfo } from '@/api/device'
 import { getSensorData, getEvents, getPassiveEventTypes, type SensorData, type MonitoringEvent, type PassiveEventType } from '@/api/monitor'
 import { getRoutineOptimize, getRoutineToday, type RoutineInfo } from '@/api/routine'
 import { getMomentTimeline, type MomentInfo } from '@/api/moment'
+import { DEFAULT_AVATAR_URL, resolveMediaUrl } from '@/common/media'
 
 const userStore = useUserStore()
 const familyStore = useFamilyStore()
@@ -231,9 +232,9 @@ const babyColumns = computed(() => [
   babyStore.babyList.map(b => ({ text: b.name, value: b.id }))
 ])
 const currentUserName = computed(() => userStore.userInfo?.nickname || '家长')
-const currentUserAvatar = computed(() => userStore.userInfo?.avatar_url || '/static/logo.png')
+const currentUserAvatar = computed(() => resolveMediaUrl(userStore.userInfo?.avatar_url, DEFAULT_AVATAR_URL))
 const currentBabyName = computed(() => babyStore.currentBaby?.name || '添加宝宝')
-const currentBabyAvatar = computed(() => babyStore.currentBaby?.avatar_url || '/static/logo.png')
+const currentBabyAvatar = computed(() => resolveMediaUrl(babyStore.currentBaby?.avatar_url, DEFAULT_AVATAR_URL))
 const currentBabyDevice = computed(() => {
   const babyId = babyStore.currentBaby?.id
   if (!babyId) return null
@@ -390,13 +391,24 @@ async function loadSensorData() {
 }
 
 async function loadEvents() {
-  if (!babyStore.currentBaby) return
-  const [eventRes, typeRes] = await Promise.all([
-    getEvents({ baby_id: babyStore.currentBaby.id, page: 1, page_size: 5 }),
-    getPassiveEventTypes(),
-  ])
-  if (eventRes.code === 0 && eventRes.data) events.value = eventRes.data.items
-  if (typeRes.code === 0 && typeRes.data) eventTypes.value = typeRes.data
+  if (!babyStore.currentBaby) {
+    events.value = []
+    eventTypes.value = []
+    unreadCount.value = 0
+    return
+  }
+  try {
+    const [eventRes, typeRes] = await Promise.all([
+      getEvents({ baby_id: babyStore.currentBaby.id, page: 1, page_size: 5 }),
+      getPassiveEventTypes(),
+    ])
+    events.value = eventRes.code === 0 && eventRes.data ? eventRes.data.items : []
+    eventTypes.value = typeRes.code === 0 && typeRes.data ? typeRes.data : []
+  } catch (error) {
+    events.value = []
+    eventTypes.value = []
+    console.warn('获取事件列表失败:', error)
+  }
   unreadCount.value = events.value.filter(e => !e.parent_handled).length
 }
 

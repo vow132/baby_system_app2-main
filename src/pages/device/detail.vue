@@ -78,7 +78,7 @@ const showRenamePopup = ref(false)
 const renameValue = ref('')
 
 const modes = [
-  { label: '睡床', value: 'sleep', icon: 'moon', color: 'linear-gradient(135deg, #5677fc, #3d5afe)', desc: '夜间守护', policy: '全量监测与告警' },
+  { label: '睡床', value: 'sleep', icon: 'clock', color: 'linear-gradient(135deg, #5677fc, #3d5afe)', desc: '夜间守护', policy: '全量监测与告警' },
   { label: '游戏床', value: 'play', icon: 'play-circle', color: 'linear-gradient(135deg, #19be6b, #0e9c5a)', desc: '活动观察', policy: '降低动作误报' },
   { label: '拼床', value: 'co_sleep', icon: 'home', color: 'linear-gradient(135deg, #ff9900, #f5a623)', desc: '亲近陪睡', policy: '弱化灯光与声音' },
 ]

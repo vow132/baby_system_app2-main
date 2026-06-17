@@ -146,7 +146,7 @@
         </view>
         <view class="func-card" @click="goToContent">
           <view class="func-icon" style="background: linear-gradient(135deg, #19be6b, #0e9c5a);">
-            <u-icon name="music-fill" size="26" color="#fff" />
+            <u-icon name="play-circle-fill" size="26" color="#fff" />
           </view>
           <text class="func-name">互动内容</text>
         </view>

@@ -43,7 +43,7 @@
           <view class="moment-media">
             <image
               v-if="item.kind === 'moment' && isPhoto(item.data)"
-              :src="item.data.thumbnail_url || item.data.media_url"
+              :src="resolveMediaUrl(item.data.thumbnail_url || item.data.media_url, '')"
               mode="aspectFill"
               class="moment-image"
             />
@@ -68,7 +68,7 @@
       <view class="grid-item" v-for="item in moments" :key="'m-' + item.id" @click="openDetail(item)">
         <image
           v-if="isPhoto(item)"
-          :src="item.thumbnail_url || item.media_url"
+          :src="resolveMediaUrl(item.thumbnail_url || item.media_url, '')"
           mode="aspectFill"
           class="grid-image"
         />
@@ -108,7 +108,7 @@
           />
           <image
             v-else-if="selectedMoment && isPhoto(selectedMoment)"
-            :src="selectedMoment.media_url"
+            :src="resolveMediaUrl(selectedMoment.media_url, '')"
             mode="aspectFill"
             class="detail-image"
           />
@@ -154,6 +154,7 @@ import {
   type MomentVideoItem,
 } from '@/api/video'
 import { getDeviceList, type DeviceInfo } from '@/api/device'
+import { resolveMediaUrl } from '@/common/media'
 
 const babyStore = useBabyStore()
 

@@ -129,7 +129,7 @@ function getAreaLabel(area: string) {
 
 function getAreaIcon(area: string) {
   const map: Record<string, string> = {
-    sleep: 'moon', cry: 'volume-up', emotion: 'heart',
+    sleep: 'clock', cry: 'volume-fill', emotion: 'heart',
     routine: 'calendar', preference: 'star', interaction: 'chat',
   }
   return map[area] || 'star'
@@ -149,7 +149,7 @@ function getTypeLabel(type: string) {
 }
 
 function getRecommendIcon(type: string) {
-  const map: Record<string, string> = { article: 'book', video: 'play-circle', activity: 'gift', tip: 'info-circle' }
+  const map: Record<string, string> = { article: 'file-text', video: 'play-circle', activity: 'gift', tip: 'info-circle' }
   return map[type] || 'star'
 }
 

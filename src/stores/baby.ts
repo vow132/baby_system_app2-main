@@ -20,21 +20,26 @@ export const useBabyStore = defineStore('baby', () => {
 
   // 获取宝宝列表
   async function fetchBabyList() {
-    const res = await getBabyList()
-    if (res.code === 0 && res.data) {
-      babyList.value = mergeWithCachedBabies(res.data)
-      if (currentBaby.value) {
-        currentBaby.value = babyList.value.find(baby => baby.id === currentBaby.value?.id) || babyList.value[0] || null
-      } else if (babyList.value.length > 0) {
-        currentBaby.value = babyList.value[0]
+    try {
+      const res = await getBabyList()
+      if (res.code === 0 && res.data) {
+        babyList.value = mergeWithCachedBabies(res.data)
+        if (currentBaby.value) {
+          currentBaby.value = babyList.value.find(baby => baby.id === currentBaby.value?.id) || babyList.value[0] || null
+        } else if (babyList.value.length > 0) {
+          currentBaby.value = babyList.value[0]
+        } else {
+          currentBaby.value = null
+        }
+        persistBabyCache()
       } else {
-        currentBaby.value = null
+        clearBabyCache()
       }
+      return res
+    } catch {
       persistBabyCache()
-    } else {
-      clearBabyCache()
+      return { code: -1, message: '获取宝宝列表失败', data: babyList.value }
     }
-    return res
   }
 
   // 添加宝宝

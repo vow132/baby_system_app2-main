@@ -39,7 +39,7 @@
       <view class="ai-card" @click="goToAI">
         <view class="ai-left">
           <view class="ai-icon">
-            <u-icon name="mic-fill" size="28" color="#fff" />
+            <u-icon name="mic" size="28" color="#fff" />
           </view>
           <view class="ai-text">
             <text class="ai-title">音色管理</text>

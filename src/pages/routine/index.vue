@@ -370,7 +370,7 @@ function getTypeText(type: ScheduleItem['type']) {
 }
 
 function getTypeIcon(type: ScheduleItem['type']) {
-  const map = { eat: 'heart-fill', sleep: 'moon', active: 'star-fill', care: 'checkmark-circle' }
+  const map = { eat: 'heart-fill', sleep: 'clock', active: 'star-fill', care: 'checkmark-circle' }
   return map[type]
 }
 </script>

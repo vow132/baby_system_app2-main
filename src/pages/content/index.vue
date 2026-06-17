@@ -43,7 +43,7 @@
       </view>
 
       <view class="empty" v-if="filteredContent.length === 0">
-        <u-icon name="music" size="48" color="#ddd" />
+        <u-icon name="play-circle" size="48" color="#ddd" />
         <text class="empty-text">{{ searchText ? '未找到匹配内容' : '暂无内容' }}</text>
       </view>
     </view>
@@ -125,8 +125,8 @@ const playCounts = ref<Record<string, number>>({})
 
 const tabs = [
   { label: '全部', value: 'all', icon: 'grid' },
-  { label: '儿歌', value: 'song', icon: 'music' },
-  { label: '故事', value: 'story', icon: 'book' },
+  { label: '儿歌', value: 'song', icon: 'play-circle' },
+  { label: '故事', value: 'story', icon: 'file-text' },
   { label: '早教', value: 'education', icon: 'star' },
   { label: '娱乐', value: 'fun', icon: 'gift' },
 ]
@@ -250,7 +250,7 @@ function getCategoryLabel(category: string) {
 }
 
 function getCategoryIcon(category: string) {
-  const map: Record<string, string> = { song: 'music', story: 'book', education: 'star', fun: 'gift' }
+  const map: Record<string, string> = { song: 'play-circle', story: 'file-text', education: 'star', fun: 'gift' }
   return map[category] || 'gift'
 }
 

@@ -293,7 +293,7 @@
               <text>实时录音</text>
             </view>
             <view class="mode-tab" :class="{ active: recordMode === 'upload' }" @click="switchRecordMode('upload')">
-              <u-icon name="folder-add" size="16" :color="recordMode === 'upload' ? '#667eea' : '#999'" />
+              <u-icon name="folder" size="16" :color="recordMode === 'upload' ? '#667eea' : '#999'" />
               <text>上传音频</text>
             </view>
           </view>
@@ -301,7 +301,7 @@
           <!-- 实时录音模式 -->
           <view class="mic-mode" v-if="recordMode === 'mic'">
             <view class="record-btn" :class="{ recording: isRecording }" @touchstart.prevent="startRecord" @touchend.prevent="stopRecord" @touchcancel.prevent="stopRecord">
-              <u-icon :name="isRecording ? 'mic-fill' : 'mic'" size="32" color="#fff" />
+              <u-icon :name="isRecording ? 'mic' : 'mic'" size="32" color="#fff" />
             </view>
             <text class="record-hint">{{ isRecording ? '松开结束录音' : '按住录音' }}</text>
             <text class="record-time" v-if="recordDuration > 0">{{ formatDuration(recordDuration) }}</text>
@@ -311,7 +311,7 @@
           <!-- 上传音频模式 -->
           <view class="upload-mode" v-if="recordMode === 'upload'">
             <view class="upload-btn" @click="chooseAudioFile">
-              <u-icon name="folder-add" size="28" color="#667eea" />
+              <u-icon name="folder" size="28" color="#667eea" />
               <text class="upload-btn-text">选择音频文件</text>
             </view>
             <text class="upload-hint">从微信聊天记录选取 mp3/wav</text>
@@ -320,7 +320,7 @@
           <!-- 已有录音：试听与重录 -->
           <view class="audio-preview" v-if="audioFilePath">
             <view class="preview-info">
-              <u-icon name="volume-up" size="20" color="#667eea" />
+              <u-icon name="volume-fill" size="20" color="#667eea" />
               <text class="preview-name">{{ audioFileName || '录音文件' }}</text>
               <text class="preview-duration" v-if="recordDuration > 0">{{ formatDuration(recordDuration) }}</text>
             </view>

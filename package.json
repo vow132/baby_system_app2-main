@@ -24,7 +24,7 @@
     "@dcloudio/uni-automator": "3.0.0-alpha-5000920260515001",
     "@dcloudio/uni-cli-shared": "3.0.0-alpha-5000920260515001",
     "@dcloudio/uni-stacktracey": "3.0.0-alpha-5000920260515001",
-    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-5000920260515001",
+    "@dcloudio/vite-plugin-uni": "^3.0.0-alpha-5000920260515001",
     "@types/node": "^20.11.24",
     "sass": "^1.99.0",
     "typescript": "^5.3.3",
