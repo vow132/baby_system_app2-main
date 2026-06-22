@@ -1,12 +1,58 @@
 <template>
   <view class="ai-page">
-    <!-- 顶部渐变卡片 -->
     <view class="hero">
-      <text class="hero-title">音色管理</text>
-      <text class="hero-desc">管理家人音色库，切换默认音色</text>
+      <text class="hero-title">AI 助手调试</text>
+      <text class="hero-desc">先打通 Gemma 文字对话链路，再逐步替换语音链路</text>
     </view>
 
-    <!-- 音色库 -->
+    <view class="section">
+      <view class="section-header">
+        <text class="section-title">文字对话测试</text>
+      </view>
+      <view class="chat-panel">
+        <view class="chat-meta">
+          <text class="chat-baby">当前宝宝：{{ currentBabyName }}</text>
+          <text class="chat-status">{{ currentBabyId ? '后端端口：34223' : '请先选择宝宝' }}</text>
+        </view>
+
+        <view v-if="messages.length" class="chat-list">
+          <view
+            v-for="item in messages"
+            :key="item.id"
+            class="chat-item"
+            :class="item.role === 'user' ? 'is-user' : 'is-ai'"
+          >
+            <text class="chat-role">{{ item.role === 'user' ? '我' : 'Gemma' }}</text>
+            <text class="chat-text">{{ item.content }}</text>
+            <text v-if="item.time" class="chat-time">{{ item.time }}</text>
+          </view>
+        </view>
+        <view v-else class="empty">
+          <u-icon name="chat" size="40" color="#ccc" />
+          <text>还没有对话，先发一条消息压一下后端</text>
+        </view>
+
+        <view class="quick-actions">
+          <text class="quick-tag" @click="fillPrompt('宝宝哭了应该怎么安抚？')">安抚建议</text>
+          <text class="quick-tag" @click="fillPrompt('请给我一个适合婴儿的睡前流程。')">睡前流程</text>
+          <text class="quick-tag" @click="fillPrompt('夜里频繁醒来可能是什么原因？')">夜醒分析</text>
+        </view>
+
+        <view class="composer">
+          <textarea
+            v-model="draft"
+            class="composer-input"
+            maxlength="500"
+            auto-height
+            placeholder="输入一段文字，直接测试 Gemma4:latest 的回复质量"
+          />
+          <button class="send-btn" :disabled="sending || !canSend" @click="handleSend">
+            {{ sending ? '发送中...' : '发送' }}
+          </button>
+        </view>
+      </view>
+    </view>
+
     <view class="section">
       <view class="section-header">
         <text class="section-title">音色库</text>
@@ -36,39 +82,84 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useBabyStore } from '@/stores'
 import {
+  getChatHistory,
   getVoiceLibrary,
+  sendMessage,
   switchDefaultVoice,
   removeVoice,
 } from '@/services/voice'
-import type { VoiceCloneInfo } from '@/api/voice'
+import type { ChatMessage, VoiceCloneInfo } from '@/api/voice'
 
 const babyStore = useBabyStore()
 
-// ---- 数据状态 ----
 const voices = ref<VoiceCloneInfo[]>([])
+const draft = ref('')
+const sending = ref(false)
+const messages = ref<Array<{ id: string; role: string; content: string; time: string }>>([])
 
-// ---- 页面生命周期 ----
+const currentBaby = computed(() => babyStore.currentBaby)
+const currentBabyId = computed(() => currentBaby.value?.id || 0)
+const currentBabyName = computed(() => currentBaby.value?.name || '未选择')
+const canSend = computed(() => !!currentBabyId.value && !!draft.value.trim())
+
 onShow(() => {
   loadData()
 })
 
-// ---- 数据加载 ----
 async function loadData() {
+  if (!babyStore.currentBaby) {
+    await babyStore.fetchBabyList()
+  }
+
   try {
     const voiceList = await getVoiceLibrary()
     voices.value = voiceList
   } catch {
     voices.value = []
   }
+
+  await loadChatHistory()
 }
 
-// ---- 工具方法 ----
-function getVoiceDisplayName(voice: VoiceCloneInfo) {
-  return voice.voice_name || voice.voice_id
+async function loadChatHistory() {
+  if (!currentBabyId.value) {
+    messages.value = []
+    return
+  }
+
+  try {
+    const history = await getChatHistory(currentBabyId.value, undefined, 1, 20)
+    const items = Array.isArray(history?.items) ? history.items : []
+    messages.value = items
+      .slice()
+      .reverse()
+      .map(normalizeMessage)
+      .filter(item => !!item.content)
+  } catch {
+    messages.value = []
+  }
+}
+
+function normalizeMessage(item: ChatMessage) {
+  return {
+    id: String(item.id || `${item.role}-${item.created_at || Math.random()}`),
+    role: item.role || 'assistant',
+    content: item.content_text || '',
+    time: formatTime(item.created_at),
+  }
+}
+
+function formatTime(value?: string | null) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${hours}:${minutes}`
 }
 
 function getVoiceRoleName(role: string) {
@@ -83,6 +174,45 @@ function getVoiceRoleName(role: string) {
 
 function goVoiceOnboarding() {
   uni.navigateTo({ url: '/pages/onboarding/index?direct=voice' })
+}
+
+function fillPrompt(text: string) {
+  draft.value = text
+}
+
+async function handleSend() {
+  if (!canSend.value || sending.value) return
+
+  const babyId = currentBabyId.value
+  const message = draft.value.trim()
+
+  messages.value.push({
+    id: `local-user-${Date.now()}`,
+    role: 'user',
+    content: message,
+    time: formatTime(new Date().toISOString()),
+  })
+  draft.value = ''
+  sending.value = true
+
+  try {
+    const result = await sendMessage(babyId, message)
+    messages.value.push({
+      id: `local-ai-${Date.now()}`,
+      role: 'assistant',
+      content: result.reply || '模型未返回内容',
+      time: formatTime(new Date().toISOString()),
+    })
+  } catch (error: any) {
+    messages.value.push({
+      id: `local-error-${Date.now()}`,
+      role: 'assistant',
+      content: error?.message || '对话请求失败',
+      time: formatTime(new Date().toISOString()),
+    })
+  } finally {
+    sending.value = false
+  }
 }
 
 async function setDefault(voice: VoiceCloneInfo) {
@@ -121,9 +251,8 @@ function confirmDelete(voice: VoiceCloneInfo) {
   padding: 24rpx 30rpx 60rpx;
 }
 
-// 顶部渐变卡片
 .hero {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+  background: linear-gradient(135deg, #0f766e, #155e75);
   border-radius: 20rpx;
   padding: 40rpx 30rpx 36rpx;
   color: #fff;
@@ -132,13 +261,104 @@ function confirmDelete(voice: VoiceCloneInfo) {
 .hero-title { display: block; font-size: 44rpx; font-weight: 700; }
 .hero-desc { display: block; font-size: 26rpx; opacity: .85; margin-top: 12rpx; }
 
-// 通用区块
 .section { margin-bottom: 26rpx; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16rpx; }
 .section-title { display: block; font-size: 32rpx; font-weight: 700; color: #333; margin-bottom: 16rpx; }
-.section-action { color: #667eea; font-size: 26rpx; padding: 4rpx 0; }
+.section-action { color: #0f766e; font-size: 26rpx; padding: 4rpx 0; }
 
-// 音色库
+.chat-panel {
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 24rpx;
+}
+.chat-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+  color: #5b6472;
+  font-size: 24rpx;
+}
+.chat-baby { font-weight: 600; color: #1f2937; }
+.chat-status { color: #0f766e; }
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+.chat-item {
+  max-width: 88%;
+  border-radius: 18rpx;
+  padding: 18rpx 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+.chat-item.is-user {
+  align-self: flex-end;
+  background: #dcfce7;
+}
+.chat-item.is-ai {
+  align-self: flex-start;
+  background: #f3f4f6;
+}
+.chat-role {
+  font-size: 22rpx;
+  color: #6b7280;
+}
+.chat-text {
+  font-size: 28rpx;
+  color: #111827;
+  line-height: 1.6;
+}
+.chat-time {
+  font-size: 22rpx;
+  color: #9ca3af;
+}
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+}
+.quick-tag {
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  background: #ecfeff;
+  color: #155e75;
+  font-size: 24rpx;
+}
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+.composer-input {
+  width: 100%;
+  min-height: 180rpx;
+  background: #f8fafc;
+  border-radius: 16rpx;
+  padding: 20rpx;
+  box-sizing: border-box;
+  font-size: 28rpx;
+  color: #111827;
+}
+.send-btn {
+  width: 100%;
+  height: 84rpx;
+  border: none;
+  border-radius: 16rpx;
+  background: linear-gradient(135deg, #0f766e, #155e75);
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+.send-btn[disabled] {
+  opacity: .55;
+}
+
 .voice-list { background: #fff; border-radius: 16rpx; overflow: hidden; }
 .voice-card { display: flex; align-items: center; padding: 24rpx; border-bottom: 1rpx solid #f1f1f1; }
 .voice-card:last-child { border-bottom: none; }
@@ -169,7 +389,6 @@ function confirmDelete(voice: VoiceCloneInfo) {
   margin-left: 8rpx;
 }
 
-// 空状态
 .empty {
   display: flex; flex-direction: column; align-items: center;
   padding: 48rpx 24rpx; color: #999; font-size: 26rpx; gap: 16rpx;

@@ -13,30 +13,22 @@
 
 // ========== 后端地址配置 ==========
 // 开发环境（小程序连真实后端）
-const DEV_BASE_URL = 'http://223.247.96.246:8123/api/v1'
+const DEV_BASE_URL = 'http://223.247.96.246:34223/api/v1'
 // 生产环境
 const PROD_BASE_URL = 'https://your-domain.com/api/v1'
 
-// 外部语音服务地址
-const DEV_SPEECH_BASE_URL = 'http://223.247.96.246:30028/v1'
+// 外部音色服务地址（新 TTS/音色服务端口）
+const DEV_SPEECH_BASE_URL = 'http://223.247.96.246:40028/v1'
 const PROD_SPEECH_BASE_URL = 'https://your-speech-domain.com/v1'
-
-// 语音识别服务地址（不同端口）
-const DEV_ASR_BASE_URL = 'http://223.247.96.246:30021'
-const PROD_ASR_BASE_URL = 'https://your-asr-domain.com'
 
 // 当前使用的后端地址
 // 开发阶段直接用 DEV_BASE_URL，上线前改为 PROD_BASE_URL
 export const BASE_URL = DEV_BASE_URL
 // export const BASE_URL = PROD_BASE_URL  // 上线时取消这行注释，注释上面那行
 
-// 当前使用的外部语音服务地址
+// 当前使用的外部音色服务地址
 export const SPEECH_BASE_URL = DEV_SPEECH_BASE_URL
 // export const SPEECH_BASE_URL = PROD_SPEECH_BASE_URL  // 上线时取消这行注释
-
-// 当前使用的语音识别服务地址
-export const ASR_BASE_URL = DEV_ASR_BASE_URL
-// export const ASR_BASE_URL = PROD_ASR_BASE_URL  // 上线时取消这行注释
 
 // ========== 请求超时配置 ==========
 export const TIMEOUT = 30000
@@ -187,12 +179,10 @@ export const API = {
     LIBRARY_UPLOAD: '/voice/library/upload',   // POST 克隆音色（文件上传方式）
     LIBRARY: '/voice/library',                 // GET 获取音色库列表
     LIBRARY_DELETE: (voice_name: string) => `/voice/library/by-name/${voice_name}`, // DELETE 根据音色名称删除
-    // 外部语音接口（注意：BASE_URL 已包含 /api/v1，所以这里不需要 /v1 前缀）
+    // 外部音色接口
     EXT_GET_VOICES: '/audio/get_voices',                // GET 获取音色列表
     EXT_DELETE_VOICE: '/audio/delete_voice',            // DELETE 删除音色（参数：voice_uri）
     EXT_CLONE_VOICE: '/audio/clone_voice',              // POST 克隆音色
-    EXT_GENERATE_SPEECH: '/audio/generate_speech',      // POST 语音合成
-    EXT_SPEECH_TO_TEXT: '/speech-to-text',              // POST 语音识别
   },
 
   // ========== 温馨瞬间模块（4个，全部小程序接口） ==========
