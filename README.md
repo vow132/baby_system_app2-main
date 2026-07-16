@@ -134,7 +134,7 @@ src/api/config.ts
 当前开发环境地址：
 
 ```ts
-const DEV_BASE_URL = 'http://223.247.96.246:8123/api/v1'
+const DEV_BASE_URL = 'http://223.247.96.246:34223/api/v1'
 ```
 
 上线前需要将 `BASE_URL` 切换为正式域名，并在微信小程序后台配置合法请求域名、合法 WebView 域名等。

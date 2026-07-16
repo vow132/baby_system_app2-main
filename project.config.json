@@ -11,7 +11,17 @@
       "disablePlugins": [],
       "outputPath": ""
     },
-    "useCompilerPlugins": false
+    "useCompilerPlugins": false,
+    "compileWorklet": false,
+    "uploadWithSourceMap": true,
+    "packNpmManually": false,
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "condition": false,
+    "swc": false,
+    "disableSWC": true
   },
   "compileType": "miniprogram",
   "simulatorPluginLibVersion": {},
@@ -21,5 +31,6 @@
   },
   "appid": "wxd0aabc6d49be65f8",
   "editorSetting": {},
-  "miniprogramRoot": "dist/build/mp-weixin/"
+  "miniprogramRoot": "dist/build/mp-weixin/",
+  "libVersion": "3.16.1"
 }
