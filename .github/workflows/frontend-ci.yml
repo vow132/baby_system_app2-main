@@ -1,0 +1,116 @@
+name: Frontend CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build WeChat Mini Program
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build WeChat Mini Program
+        run: npm run build:mp-weixin
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: mp-weixin-${{ github.sha }}
+          path: dist/build/mp-weixin
+          if-no-files-found: error
+          retention-days: 7
+
+  notify:
+    name: Notify group on failure
+    needs: build
+    if: always() && needs.build.result == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      WEBHOOK_URL: ${{ secrets.GROUP_WEBHOOK_URL }}
+      NOTIFY_TYPE: ${{ vars.NOTIFY_TYPE }}
+      REPOSITORY: ${{ github.repository }}
+      BRANCH: ${{ github.ref_name }}
+      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Send failure notification
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          if [[ -z "$WEBHOOK_URL" ]]; then
+            echo "::warning::GROUP_WEBHOOK_URL is not configured; notification skipped."
+            exit 0
+          fi
+
+          notify_type="${NOTIFY_TYPE,,}"
+          if [[ -z "$notify_type" ]]; then
+            case "$WEBHOOK_URL" in
+              *qyapi.weixin.qq.com*) notify_type="wecom" ;;
+              *open.feishu.cn*|*open.larksuite.com*) notify_type="feishu" ;;
+              *oapi.dingtalk.com*) notify_type="dingtalk" ;;
+              *)
+                echo "::error::Set repository variable NOTIFY_TYPE to wecom, feishu, or dingtalk."
+                exit 1
+                ;;
+            esac
+          fi
+
+          message="❌ 前端 CI 失败
+          仓库：${REPOSITORY}
+          分支：${BRANCH}
+          详情：${RUN_URL}"
+
+          case "$notify_type" in
+            wecom)
+              payload="$(jq -n --arg text "$message" \
+                '{msgtype:"text", text:{content:$text}}')"
+              ;;
+            feishu)
+              payload="$(jq -n --arg text "$message" \
+                '{msg_type:"text", content:{text:$text}}')"
+              ;;
+            dingtalk)
+              payload="$(jq -n --arg text "$message" \
+                '{msgtype:"text", text:{content:$text}}')"
+              ;;
+            *)
+              echo "::error::Unsupported NOTIFY_TYPE: ${notify_type}"
+              exit 1
+              ;;
+          esac
+
+          curl --fail --show-error --silent \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "$WEBHOOK_URL"
