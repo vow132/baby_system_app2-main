@@ -183,12 +183,17 @@ async function handleNotificationChange(value: boolean | string | number) {
   }
 
   subscribeLoading.value = true
+  let syncStage = '请求微信订阅'
   try {
     // 必须直接位于用户点击产生的事件链中，不能在 onShow 等生命周期自动调用。
     const results = await requestSubscribe(templateIds.value)
     const accepted = Object.values(results).some(status => status === 'accept')
-    if (accepted) await bindCurrentWechatUser()
+    if (accepted) {
+      syncStage = '绑定微信身份'
+      await bindCurrentWechatUser()
+    }
     const clientRequestId = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+    syncStage = '同步订阅记录'
     await confirmPushSubscriptions({
       client_request_id: clientRequestId,
       results: Object.entries(results).map(([template_id, status]) => ({ template_id, status })),
@@ -203,12 +208,20 @@ async function handleNotificationChange(value: boolean | string | number) {
       return
     }
     subscriptionHint.value = '已订阅，本次授权可发送 1 次'
+    syncStage = '保存推送设置'
     await savePushSettings()
     uni.showToast({ title: '已开启哭声通知', icon: 'success' })
   } catch (e) {
     settings.notification = false
     console.error('[settings] subscribe', e)
-    uni.showToast({ title: '订阅状态同步失败，请重试', icon: 'none' })
+    const message = e instanceof Error && e.message
+      ? e.message
+      : '订阅状态同步失败，请重试'
+    uni.showModal({
+      title: '订阅同步失败',
+      content: `${syncStage}失败：${message}`,
+      showCancel: false,
+    })
   } finally {
     subscribeLoading.value = false
   }

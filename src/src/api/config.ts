@@ -13,7 +13,7 @@
 
 // ========== 后端地址配置 ==========
 // 开发环境（小程序连真实后端）
-const DEV_BASE_URL = 'http://223.247.96.246:34223/api/v1'
+const DEV_BASE_URL = 'http://223.247.96.246:8123/api/v1'
 // 生产环境
 const PROD_BASE_URL = 'https://your-speech-domain.com/v1'
 

@@ -46,10 +46,13 @@ export function bindCurrentWechatUser(): Promise<void> {
           if (response.code !== 0) throw new Error(response.message || '微信绑定失败')
           resolve()
         } catch (error) {
-          reject(error)
+          const message = error instanceof Error
+            ? error.message
+            : (error as any)?.errMsg || '微信绑定失败'
+          reject(new Error(message))
         }
       },
-      fail: reject,
+      fail: (error) => reject(new Error(error.errMsg || '微信登录调用失败')),
     })
   })
 }
@@ -65,7 +68,7 @@ export function requestSubscribe(tmplIds: string[]): Promise<SubscribeResults> {
     return Promise.resolve({})
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     uni.requestSubscribeMessage({
       tmplIds: validIds,
       success: (res) => {
@@ -81,12 +84,7 @@ export function requestSubscribe(tmplIds: string[]): Promise<SubscribeResults> {
         }
         resolve(results)
       },
-      fail: () => resolve(
-        validIds.reduce<SubscribeResults>((output, id) => {
-          output[id] = 'reject'
-          return output
-        }, {}),
-      ),
+      fail: (error) => reject(new Error(error.errMsg || '微信订阅授权调用失败')),
     })
   })
 }

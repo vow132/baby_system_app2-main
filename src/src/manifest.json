@@ -6,7 +6,7 @@
   "versionCode": "100",
   "transformPx": false,
   "mp-weixin": {
-    "appid": "wxd0aabc6d49be65f8",
+    "appid": "wxe769b11ab4f64858",
     "setting": {
       "urlCheck": false,
       "es6": true,
@@ -29,7 +29,7 @@
       "port": 3000,
       "proxy": {
         "/api": {
-          "target": "http://223.247.96.246:34223",
+          "target": "http://223.247.96.246:8123",
           "changeOrigin": true
         }
       }
