@@ -5,7 +5,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import {
   getFamilyInfo, updateFamilyInfo, createFamily, joinFamily, getFamilyMembers, getInviteCode, regenerateInviteCode, transferFamilyAdmin, dissolveFamily, leaveFamily,
-  updateFamilyMemberRole, removeFamilyMember,
+  updateFamilyMemberRole, updateFamilyMemberAdmin, removeFamilyMember,
   type FamilyInfo, type FamilyMember
 } from '@/api/family'
 import { useUserStore } from './user'
@@ -22,6 +22,7 @@ export const useFamilyStore = defineStore('family', () => {
   const familyName = computed(() => familyInfo.value?.family_name || '未加入家庭')
   const inviteCode = computed(() => familyInfo.value?.family_code || '')
   const isAdmin = computed(() => familyInfo.value?.is_admin === 1 || familyInfo.value?.relation === 'creator')
+  const isFounder = computed(() => familyInfo.value?.is_founder === 1 || familyInfo.value?.relation === 'creator')
 
   // 持久化家庭信息到本地缓存
   function persistFamilyCache() {
@@ -115,13 +116,16 @@ export const useFamilyStore = defineStore('family', () => {
     return res
   }
 
-  async function updateMemberRoleAction(memberId: number, memberRole: string, options?: {
-    is_admin?: number
-    can_view?: number
-    can_control?: number
-    can_receive_push?: number
-  }) {
-    const res = await updateFamilyMemberRole(memberId, { member_role: memberRole, ...options })
+  async function updateMemberRoleAction(memberId: number, memberRole: string) {
+    const res = await updateFamilyMemberRole(memberId, { member_role: memberRole })
+    if (res.code === 0) {
+      await fetchMembers()
+    }
+    return res
+  }
+
+  async function updateMemberAdminAction(memberId: number, isAdmin: number) {
+    const res = await updateFamilyMemberAdmin(memberId, isAdmin)
     if (res.code === 0) {
       await fetchMembers()
     }
@@ -173,6 +177,7 @@ export const useFamilyStore = defineStore('family', () => {
     familyName,
     inviteCode,
     isAdmin,
+    isFounder,
     fetchFamilyInfo,
     createFamilyAction,
     updateFamilyInfoAction,
@@ -181,6 +186,7 @@ export const useFamilyStore = defineStore('family', () => {
     fetchInviteCode,
     regenerateInviteCodeAction,
     updateMemberRoleAction,
+    updateMemberAdminAction,
     removeMemberAction,
     transferAdminAction,
     dissolveFamilyAction,

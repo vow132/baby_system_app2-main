@@ -19,6 +19,7 @@ export interface FamilyInfo {
   member_role?: string | null
   relation?: string | null
   is_admin?: number | null
+  is_founder?: number | null
   can_view?: number | null
   can_control?: number | null
   can_receive_push?: number | null
@@ -40,6 +41,7 @@ export interface FamilyMember {
   push_priority: number | null
   is_emergency_contact: number | null
   is_admin: number | null
+  is_founder: number | null
   is_active: number | null
   joined_at: string | null
   nickname: string | null
@@ -92,12 +94,12 @@ export function getFamilyMembers() {
  */
 export function updateFamilyMemberRole(memberId: number, data: {
   member_role: string
-  is_admin?: number
-  can_view?: number
-  can_control?: number
-  can_receive_push?: number
 }) {
-  return put(withQuery(API.FAMILY.MEMBER_ROLE(memberId), data), data)
+  return put(API.FAMILY.MEMBER_ROLE(memberId), data)
+}
+
+export function updateFamilyMemberAdmin(memberId: number, isAdmin: number) {
+  return put(API.FAMILY.MEMBER_ADMIN(memberId), { is_admin: isAdmin })
 }
 
 /**

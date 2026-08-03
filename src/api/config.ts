@@ -63,6 +63,7 @@ export const API = {
     UPDATE: '/family/info',               // PUT 修改家庭名称等成员信息
     MEMBERS: '/family/members',           // GET 查看家庭所有成员成员列表
     MEMBER_ROLE: (member_id: number) => `/family/members/${member_id}/role`,
+    MEMBER_ADMIN: (member_id: number) => `/family/members/${member_id}/admin`,
     MEMBER_REMOVE: (member_id: number) => `/family/members/${member_id}`,
     INVITE_CODE: '/family/invite-code',   // GET 生成家庭邀请码供他人加入
     INVITE_REGENERATE: '/family/invite-code/regenerate',

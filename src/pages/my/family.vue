@@ -55,7 +55,7 @@
           <u-icon name="close-circle" size="22" color="#ff4d4f" />
           <text>离开家庭</text>
         </view>
-        <view class="family-action-item danger" @click="confirmDissolveFamily">
+        <view class="family-action-item danger" v-if="isCurrentFounder" @click="confirmDissolveFamily">
           <u-icon name="trash" size="22" color="#ff4d4f" />
           <text>解散家庭</text>
         </view>
@@ -77,14 +77,15 @@
           <view class="member-info">
             <view class="member-title-row">
               <text class="member-name">{{ member.nickname || member.display_name || member.phone || '家庭成员' }}</text>
-              <text class="admin-badge" v-if="isMemberAdmin(member)">管理员</text>
+              <text class="founder-badge" v-if="isMemberFounder(member)">创始人</text>
+              <text class="admin-badge" v-else-if="isMemberAdmin(member)">管理员</text>
               <text class="self-badge" v-if="isSelf(member)">我</text>
             </view>
             <text class="member-role">{{ getRoleText(member.member_role) }}</text>
             <text class="member-hint" v-if="isSelf(member)">当前账号不可移除</text>
           </view>
-          <button class="member-action" v-if="isCurrentAdmin || isSelf(member)" @click="openMemberActions(member)">
-            {{ isCurrentAdmin && !isSelf(member) ? '管理' : '编辑' }}
+          <button class="member-action" v-if="canOpenMemberActions(member)" @click="openMemberActions(member)">
+            {{ canManageMember(member) && !isSelf(member) ? '管理' : '编辑' }}
           </button>
         </view>
       </view>
@@ -135,6 +136,22 @@
         </view>
       </view>
     </u-popup>
+
+    <u-popup :show="showAdminConfirm" mode="center" round="16" @close="closeAdminConfirm">
+      <view class="popup-form">
+        <text class="popup-title">{{ nextAdminState === 1 ? '设为管理员' : '解除管理员' }}</text>
+        <text class="admin-confirm-text">{{ adminConfirmMessage }}</text>
+        <view class="popup-btns">
+          <u-button text="取消" :disabled="adminSubmitting" @click="closeAdminConfirm" />
+          <u-button
+            type="primary"
+            :text="nextAdminState === 1 ? '确认设置' : '确认解除'"
+            :loading="adminSubmitting"
+            @click="confirmMemberAdminChange"
+          />
+        </view>
+      </view>
+    </u-popup>
   </view>
 </template>
 
@@ -155,6 +172,10 @@ const babyCount = ref(0)
 const showCreateFamily = ref(false)
 const showJoinFamily = ref(false)
 const showEditFamily = ref(false)
+const showAdminConfirm = ref(false)
+const selectedAdminMember = ref<FamilyMember | null>(null)
+const nextAdminState = ref<0 | 1>(0)
+const adminSubmitting = ref(false)
 const loading = ref(false)
 const newFamilyName = ref('')
 const editFamilyName = ref('')
@@ -165,7 +186,19 @@ const currentMember = computed(() => members.value.find((member) => isSelf(membe
 const isCurrentAdmin = computed(() => (
   familyStore.isAdmin || !!currentMember.value && isMemberAdmin(currentMember.value)
 ))
+const isCurrentFounder = computed(() => (
+  familyStore.isFounder || !!currentMember.value && isMemberFounder(currentMember.value)
+))
 const transferableMembers = computed(() => members.value.filter((member) => !isSelf(member)))
+const selectedAdminMemberName = computed(() => {
+  const member = selectedAdminMember.value
+  return member?.nickname || member?.display_name || member?.phone || '该成员'
+})
+const adminConfirmMessage = computed(() => (
+  nextAdminState.value === 1
+    ? `确认将「${selectedAdminMemberName.value}」设为管理员吗？设置后该成员可以修改家庭信息、邀请成员和管理普通成员。`
+    : `确认解除「${selectedAdminMemberName.value}」的管理员权限吗？`
+))
 
 const roleOptions = [
   { label: '家长', value: 'parent' },
@@ -235,8 +268,22 @@ function isSelf(member: FamilyMember) {
   return !!userStore.userInfo?.id && member.user_id === userStore.userInfo.id
 }
 
+function isMemberFounder(member: FamilyMember) {
+  return member.is_founder === 1 || member.relation === 'creator'
+}
+
 function isMemberAdmin(member: FamilyMember) {
-  return member.is_admin === 1 || member.relation === 'creator'
+  return isMemberFounder(member) || member.is_admin === 1
+}
+
+function canManageMember(member: FamilyMember) {
+  if (!isCurrentAdmin.value) return false
+  if (isCurrentFounder.value) return true
+  return !isMemberAdmin(member)
+}
+
+function canOpenMemberActions(member: FamilyMember) {
+  return isSelf(member) || canManageMember(member)
 }
 
 async function copyInviteCode() {
@@ -282,19 +329,19 @@ async function showInviteCode() {
 }
 
 function openMemberActions(member: FamilyMember) {
-  if (!isCurrentAdmin.value && !isSelf(member)) {
-    uni.showToast({ title: '只有管理员可以管理成员', icon: 'none' })
+  if (!canOpenMemberActions(member)) {
+    uni.showToast({ title: '无权管理该成员', icon: 'none' })
     return
   }
 
   const actions = isSelf(member) ? ['修改昵称', '修改角色'] : ['修改角色']
-  if (isCurrentAdmin.value) {
+  if (isCurrentFounder.value && !isMemberFounder(member)) {
     actions.push(isMemberAdmin(member) ? '解除管理员' : '设为管理员')
   }
-  if (isCurrentAdmin.value && !isSelf(member)) {
-    actions.push('转让管理员')
+  if (isCurrentFounder.value && !isSelf(member)) {
+    actions.push('转让创始人')
   }
-  if (!isSelf(member)) {
+  if (canManageMember(member) && !isSelf(member)) {
     actions.push('移除成员')
   }
 
@@ -307,11 +354,11 @@ function openMemberActions(member: FamilyMember) {
       } else if (action === '修改角色') {
         chooseRole(member)
       } else if (action === '设为管理员' || action === '解除管理员') {
-        toggleMemberAdmin(member, action === '设为管理员')
-      } else if (action === '转让管理员') {
-        confirmTransferAdmin(member)
+        openAdminConfirm(member, action === '设为管理员')
+      } else if (action === '转让创始人') {
+        setTimeout(() => confirmTransferAdmin(member), 200)
       } else if (action === '移除成员') {
-        confirmRemoveMember(member)
+        setTimeout(() => confirmRemoveMember(member), 200)
       }
     },
   })
@@ -350,7 +397,7 @@ function confirmRegenerateInviteCode() {
 }
 
 function confirmLeaveFamily() {
-  if (isCurrentAdmin.value) {
+  if (isCurrentFounder.value) {
     chooseTransferBeforeLeave()
     return
   }
@@ -391,7 +438,7 @@ function chooseTransferBeforeLeave() {
   if (!transferableMembers.value.length) {
     uni.showModal({
       title: '无法直接离开',
-      content: '当前账号是家庭管理员，且没有其他成员可接收管理员权限。如不再使用该家庭，请先解散家庭。',
+      content: '当前账号是家庭创始人，且没有其他成员可接收创始人权限。如不再使用该家庭，请先解散家庭。',
       confirmText: '去解散',
       confirmColor: '#ff4d4f',
       success: (res) => {
@@ -404,8 +451,8 @@ function chooseTransferBeforeLeave() {
   }
 
   uni.showModal({
-    title: '需要先转让管理员',
-    content: '管理员离开家庭前，需要先把管理员权限转让给其他成员。转让完成后再离开家庭。',
+    title: '需要先转让创始人',
+    content: '创始人离开家庭前，需要先把创始人身份转让给其他成员。转让完成后再离开家庭。',
     confirmText: '选择成员',
     confirmColor: '#5677fc',
     success: (res) => {
@@ -427,14 +474,14 @@ function chooseTransferBeforeLeave() {
 }
 
 function confirmTransferAdmin(member: FamilyMember) {
-  if (!isCurrentAdmin.value) {
-    uni.showToast({ title: '只有管理员可以转让管理员', icon: 'none' })
+  if (!isCurrentFounder.value) {
+    uni.showToast({ title: '只有创始人可以转让创始人身份', icon: 'none' })
     return
   }
   const name = member.nickname || member.display_name || member.phone || '该成员'
   uni.showModal({
-    title: '转让管理员',
-    content: `转让后「${name}」将成为家庭管理员，你可能不再拥有家庭管理权限。确定转让吗？`,
+    title: '转让创始人',
+    content: `转让后「${name}」将成为家庭创始人，你将变为普通成员。确定转让吗？`,
     confirmText: '确认转让',
     confirmColor: '#5677fc',
     success: async (res) => {
@@ -444,13 +491,13 @@ function confirmTransferAdmin(member: FamilyMember) {
         loading.value = true
         const result = await familyStore.transferAdminAction(member.id)
         if (result.code === 0) {
-          uni.showToast({ title: '管理员已转让', icon: 'success' })
+          uni.showToast({ title: '创始人已转让', icon: 'success' })
           await loadFamilyData()
         } else {
           uni.showToast({ title: result.message || '转让失败', icon: 'none' })
         }
       } catch {
-        uni.showToast({ title: '转让管理员接口未接通', icon: 'none' })
+        uni.showToast({ title: '转让创始人接口未接通', icon: 'none' })
       } finally {
         loading.value = false
       }
@@ -459,6 +506,10 @@ function confirmTransferAdmin(member: FamilyMember) {
 }
 
 function confirmDissolveFamily() {
+  if (!isCurrentFounder.value) {
+    uni.showToast({ title: '只有创始人可以解散家庭', icon: 'none' })
+    return
+  }
   uni.showModal({
     title: '⚠ 确定解散家庭？',
     content: '一旦解散将永久删除全部数据',
@@ -491,37 +542,52 @@ function confirmDissolveFamily() {
   })
 }
 
-function toggleMemberAdmin(member: FamilyMember, willBeAdmin: boolean) {
-  const name = member.nickname || member.display_name || member.phone || '该成员'
-  uni.showModal({
-    title: willBeAdmin ? '设为管理员' : '解除管理员',
-    content: willBeAdmin
-      ? `设为管理员后，${name} 可以修改家庭信息、邀请成员和管理成员。`
-      : `解除后，${name} 将不能修改家庭信息、邀请成员和管理成员。`,
-    confirmText: willBeAdmin ? '设为管理员' : '确认解除',
-    confirmColor: willBeAdmin ? '#5677fc' : '#ff4d4f',
-    success: async (res) => {
-      if (!res.confirm) return
+function openAdminConfirm(member: FamilyMember, willBeAdmin: boolean) {
+  selectedAdminMember.value = member
+  nextAdminState.value = willBeAdmin ? 1 : 0
+  showAdminConfirm.value = true
+}
 
-      try {
-        loading.value = true
-        const result = await familyStore.updateMemberRoleAction(member.id, member.member_role || 'parent', {
-          is_admin: willBeAdmin ? 1 : 0,
-        })
+function closeAdminConfirm() {
+  if (adminSubmitting.value) return
+  showAdminConfirm.value = false
+  selectedAdminMember.value = null
+}
 
-        if (result.code === 0) {
-          uni.showToast({ title: willBeAdmin ? '已设为管理员' : '已解除管理员', icon: 'success' })
-          await loadFamilyData()
-        } else {
-          uni.showToast({ title: result.message || '管理员设置失败', icon: 'none' })
-        }
-      } catch {
-        uni.showToast({ title: '管理员设置接口未接通', icon: 'none' })
-      } finally {
-        loading.value = false
-      }
-    },
-  })
+async function confirmMemberAdminChange() {
+  const member = selectedAdminMember.value
+  if (!member || adminSubmitting.value) return
+
+  if (!isCurrentFounder.value) {
+    closeAdminConfirm()
+    uni.showToast({ title: '只有创始人可以设置管理员', icon: 'none' })
+    return
+  }
+
+  const willBeAdmin = nextAdminState.value === 1
+  try {
+    adminSubmitting.value = true
+    uni.showLoading({ title: '正在保存...', mask: true })
+    const result = await familyStore.updateMemberAdminAction(member.id, nextAdminState.value)
+
+    if (result.code !== 0) {
+      throw new Error(result.message || '管理员设置失败')
+    }
+
+    members.value = members.value.map((item) => (
+      item.id === member.id ? { ...item, is_admin: nextAdminState.value } : item
+    ))
+    showAdminConfirm.value = false
+    selectedAdminMember.value = null
+    await loadFamilyData()
+    uni.showToast({ title: willBeAdmin ? '已设为管理员' : '已解除管理员', icon: 'success' })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '管理员设置失败'
+    uni.showToast({ title: message, icon: 'none', duration: 2500 })
+  } finally {
+    uni.hideLoading()
+    adminSubmitting.value = false
+  }
 }
 
 function chooseRole(member: FamilyMember) {
@@ -911,6 +977,7 @@ async function handleJoinFamily() {
   white-space: nowrap;
 }
 
+.founder-badge,
 .admin-badge,
 .self-badge {
   flex-shrink: 0;
@@ -918,6 +985,11 @@ async function handleJoinFamily() {
   margin-left: 10rpx;
   font-size: 20rpx;
   border-radius: 999rpx;
+}
+
+.founder-badge {
+  color: #d48806;
+  background: #fff7e6;
 }
 
 .admin-badge {
@@ -973,6 +1045,13 @@ async function handleJoinFamily() {
   font-weight: 700;
   text-align: center;
   color: #222936;
+}
+
+.admin-confirm-text {
+  display: block;
+  font-size: 26rpx;
+  line-height: 1.7;
+  color: #4b5563;
 }
 
 .field-label {
