@@ -105,6 +105,11 @@ export function wechatLogin(data: { code: string }) {
   return post<LoginResponse>(API.AUTH.WECHAT_LOGIN, data, { ignore401: true })
 }
 
+/** 将已登录的手机号账号绑定到当前小程序 OpenID。 */
+export function bindWechat(data: { code: string }) {
+  return post<{ wechat_bound: boolean }>(API.AUTH.WECHAT_BIND, data)
+}
+
 /**
  * 获取用户信息
  */

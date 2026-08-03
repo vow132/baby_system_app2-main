@@ -13,9 +13,9 @@
 
 // ========== 后端地址配置 ==========
 // 开发环境（小程序连真实后端）
-const DEV_BASE_URL = 'http://223.247.96.246:34223/api/v1'
+const DEV_BASE_URL = 'http://223.247.96.246:8123/api/v1'
 // 生产环境
-const PROD_BASE_URL = 'https://your-domain.com/api/v1'
+const PROD_BASE_URL = 'https://your-speech-domain.com/v1'
 
 // 外部音色服务地址（新 TTS/音色服务端口）
 const DEV_SPEECH_BASE_URL = 'http://223.247.96.246:40028/v1'
@@ -50,6 +50,7 @@ export const API = {
     BIND_PHONE: '/auth/bind-phone',       // POST 绑定/更换手机号
     CANCEL_ACCOUNT: '/auth/cancel-account', // POST 注销账号
     WECHAT_LOGIN: '/auth/wechat-login',   // POST 微信授权快捷登录
+    WECHAT_BIND: '/auth/wechat-bind',     // POST 将当前账号绑定到本微信用户
     INFO: '/auth/info',                   // GET 查询当前用户基本信息
     UPDATE_INFO: '/auth/info',            // PUT 修改用户昵称头像等信息
   },
@@ -230,6 +231,10 @@ export const API = {
   PUSH: {
     HISTORY: '/push/history',
     SETTINGS: '/push/settings',
+    TEMPLATES: '/push/templates',
+    SUBSCRIPTIONS: '/push/subscriptions',
+    SUBSCRIPTION_CONFIRM: '/push/subscriptions/confirm',
+    TEST: '/push/test',
   },
 
   ALARM: {

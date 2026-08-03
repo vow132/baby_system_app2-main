@@ -22,7 +22,7 @@ export const useBabyStore = defineStore('baby', () => {
   async function fetchBabyList() {
     try {
       const res = await getBabyList()
-      if (res.code === 0 && res.data) {
+      if (res.code === 0 && Array.isArray(res.data)) {
         babyList.value = mergeWithCachedBabies(res.data)
         if (currentBaby.value) {
           currentBaby.value = babyList.value.find(baby => baby.id === currentBaby.value?.id) || babyList.value[0] || null
@@ -33,7 +33,8 @@ export const useBabyStore = defineStore('baby', () => {
         }
         persistBabyCache()
       } else {
-        clearBabyCache()
+        console.warn('[baby-store] keep cache after list request failed', res.code, res.message)
+        persistBabyCache()
       }
       return res
     } catch {

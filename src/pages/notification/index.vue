@@ -12,7 +12,7 @@
     </view>
 
     <view class="notice-list" v-if="notices.length">
-      <view class="notice-card" v-for="item in notices" :key="item.id">
+      <view class="notice-card" v-for="item in notices" :key="item.id" @click="openNotice(item)">
         <view class="notice-dot" :class="{ unread: !item.read_status }" />
         <view class="notice-copy">
           <text class="notice-title">{{ item.title || getTypeText(item.push_type) }}</text>
@@ -38,9 +38,9 @@ const loading = ref(false)
 const pushType = ref('')
 const filters = [
   { label: '全部', value: '' },
-  { label: '告警', value: 'alarm' },
-  { label: '作息', value: 'routine' },
-  { label: '系统', value: 'system' },
+  { label: '提醒', value: 'warning' },
+  { label: '告警', value: 'alert' },
+  { label: '紧急', value: 'emergency' },
 ]
 
 onShow(loadHistory)
@@ -63,8 +63,18 @@ function switchType(type: string) {
 }
 
 function getTypeText(type?: string) {
-  const map: Record<string, string> = { alarm: '看护告警', routine: '作息提醒', system: '系统通知' }
+  const map: Record<string, string> = { warning: '哭声提醒', alert: '哭声告警', emergency: '紧急哭声报警' }
   return map[type || ''] || '通知'
+}
+
+function openNotice(item: PushHistoryItem) {
+  if (!item.page) return
+  const query = [
+    item.event_id ? `id=${item.event_id}` : '',
+    item.baby_id ? `baby_id=${item.baby_id}` : '',
+    item.notification_id ? `notification_id=${item.notification_id}` : '',
+  ].filter(Boolean).join('&')
+  uni.navigateTo({ url: `/${item.page}${query ? `?${query}` : ''}` })
 }
 
 function formatTime(time?: string | null) {

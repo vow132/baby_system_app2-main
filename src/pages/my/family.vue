@@ -679,6 +679,7 @@ async function handleJoinFamily() {
     uni.showToast({ title: res.message || '加入失败', icon: 'none' })
   }
 }
+
 </script>
 
 <style lang="scss" scoped>

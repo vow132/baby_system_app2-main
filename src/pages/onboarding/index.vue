@@ -356,6 +356,26 @@
         <text class="done-desc">{{ doneDesc }}</text>
       </view>
 
+      <view class="section-card subscribe-card" v-if="!subscribeDone">
+        <text class="card-title">开启消息通知</text>
+        <text class="card-desc">订阅后可在微信中实时收到宝宝状态提醒、告警和周报</text>
+        <view class="subscribe-benefits">
+          <view class="benefit-item">
+            <u-icon name="bell-fill" size="16" color="#5677fc" />
+            <text>宝宝哭了即时提醒</text>
+          </view>
+          <view class="benefit-item">
+            <u-icon name="clock-fill" size="16" color="#5677fc" />
+            <text>每周/每月成长小结</text>
+          </view>
+          <view class="benefit-item">
+            <u-icon name="info-circle-fill" size="16" color="#5677fc" />
+            <text>小事动态通知</text>
+          </view>
+        </view>
+        <u-button type="primary" text="开启通知" @click="handleSubscribe" :loading="subscribeLoading" block />
+      </view>
+
       <view class="done-actions">
         <u-button type="primary" text="进入首页" @click="goHome" block />
         <u-button v-if="onboardingEntryMode === 'create'" text="现在录入家人声音" @click="currentStep = 5" block plain />
@@ -386,6 +406,8 @@ import { API } from '@/api/config'
 import { getDeviceList, type DeviceInfo } from '@/api/device'
 import { cloneVoiceLibrary } from '@/services/voice'
 import { formatBabyAge } from '@/utils/age'
+import { confirmPushSubscriptions, getPushTemplates, updatePushSettings } from '@/api/push'
+import { bindCurrentWechatUser, SUBSCRIBE_TEMPLATES, requestSubscribe, hasRequestedSubscribe } from '@/utils/subscribe'
 
 const babyStore = useBabyStore()
 const familyStore = useFamilyStore()
@@ -401,6 +423,7 @@ const onboardingEntryMode = ref<'create' | 'join'>('create')
 onLoad(async (options: any) => {
   const sysInfo = uni.getSystemInfoSync()
   statusBarHeight.value = sysInfo.statusBarHeight || 44
+  void loadPushTemplate()
 
   // 直接模式：从AI陪伴页面进入，跳到语音录入
   if (options?.direct === 'voice') {
@@ -562,6 +585,26 @@ const voiceRoles = [
   { label: '奶奶/外婆', value: 'grandma', icon: 'woman' },
   { label: '其他', value: 'other', icon: 'account' },
 ]
+
+const subscribeDone = ref(hasRequestedSubscribe())
+const subscribeLoading = ref(false)
+const pushTemplateIds = ref<string[]>([
+  SUBSCRIBE_TEMPLATES.ALERT,
+  SUBSCRIBE_TEMPLATES.REMINDER,
+  SUBSCRIBE_TEMPLATES.REPORT,
+].filter(Boolean))
+
+async function loadPushTemplate() {
+  try {
+    const res = await getPushTemplates()
+    const alertTemplate = res.data?.cry_alert
+    if (res.code === 0) {
+      pushTemplateIds.value = alertTemplate?.enabled && alertTemplate.template_id
+        ? [alertTemplate.template_id]
+        : []
+    }
+  } catch { /* 保留构建时配置的模板 ID */ }
+}
 
 const selectedBabyName = ref('')
 const deviceList = ref<DeviceInfo[]>([])
@@ -1143,6 +1186,38 @@ async function submitVoiceClone() {
   }
 }
 
+async function handleSubscribe() {
+  const tmplIds = pushTemplateIds.value
+  if (tmplIds.length === 0) {
+    uni.showToast({ title: '暂无可订阅模板，请联系管理员配置', icon: 'none' })
+    return
+  }
+
+  subscribeLoading.value = true
+  try {
+    const results = await requestSubscribe(tmplIds)
+    const accepted = Object.values(results).some(status => status === 'accept')
+    if (accepted) await bindCurrentWechatUser()
+    const clientRequestId = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+    await confirmPushSubscriptions({
+      client_request_id: clientRequestId,
+      results: Object.entries(results).map(([template_id, status]) => ({ template_id, status })),
+    })
+    if (accepted) {
+      subscribeDone.value = true
+      await updatePushSettings({ channel_app: true, cry_alert_enabled: true })
+      uni.showToast({ title: '已开启消息通知', icon: 'success' })
+    } else {
+      uni.showToast({ title: '已跳过，可在设置中开启', icon: 'none' })
+    }
+  } catch (e) {
+    console.error('[onboarding] subscribe', e)
+    uni.showToast({ title: '订阅状态同步失败，请重试', icon: 'none' })
+  } finally {
+    subscribeLoading.value = false
+  }
+}
+
 function goHome() {
   uni.switchTab({ url: '/pages/index/index' })
 }
@@ -1562,6 +1637,25 @@ onUnmounted(() => {
 
 .done-actions {
   padding: 0 30rpx; display: flex; flex-direction: column; gap: 20rpx;
+}
+
+.subscribe-card {
+  margin: 0 30rpx 24rpx;
+}
+
+.subscribe-benefits {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin-bottom: 24rpx;
+}
+
+.benefit-item {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  font-size: 26rpx;
+  color: #555;
 }
 
 .bottom-nav {
