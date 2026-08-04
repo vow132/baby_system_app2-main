@@ -15,20 +15,27 @@
 // 开发环境（小程序连真实后端）
 const DEV_BASE_URL = 'http://223.247.96.246:8123/api/v1'
 // 生产环境
-const PROD_BASE_URL = 'https://your-speech-domain.com/v1'
+const PROD_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://your-api-domain.com/api/v1'
 
 // 外部音色服务地址（新 TTS/音色服务端口）
 const DEV_SPEECH_BASE_URL = 'http://223.247.96.246:40028/v1'
-const PROD_SPEECH_BASE_URL = 'https://your-speech-domain.com/v1'
+const PROD_SPEECH_BASE_URL = import.meta.env.VITE_SPEECH_BASE_URL || 'https://your-speech-domain.com/v1'
 
-// 当前使用的后端地址
-// 开发阶段直接用 DEV_BASE_URL，上线前改为 PROD_BASE_URL
-export const BASE_URL = DEV_BASE_URL
-// export const BASE_URL = PROD_BASE_URL  // 上线时取消这行注释，注释上面那行
+// 开发构建连接测试 IP；生产构建必须通过 VITE_API_BASE_URL 指向 HTTPS 合法域名。
+export const BASE_URL = import.meta.env.DEV ? DEV_BASE_URL : PROD_BASE_URL
+
+// 开发环境直连 8122 便于联调；生产环境强制走 8123 登录网关。
+export const EGOLIFE_USE_GATEWAY = !import.meta.env.DEV
+export const EGOLIFE_DIRECT_BASE_URL = import.meta.env.VITE_EGOLIFE_DIRECT_BASE_URL || 'http://223.247.96.246:8122'
+export const EGOLIFE_BASE_URL = EGOLIFE_USE_GATEWAY ? `${BASE_URL}/egolife` : EGOLIFE_DIRECT_BASE_URL
+export const EGOLIFE_TEST_CONTEXT = {
+  family_id: 'family01',
+  device_sn: 'BB20240003',
+  baby_id: '111',
+}
 
 // 当前使用的外部音色服务地址
-export const SPEECH_BASE_URL = DEV_SPEECH_BASE_URL
-// export const SPEECH_BASE_URL = PROD_SPEECH_BASE_URL  // 上线时取消这行注释
+export const SPEECH_BASE_URL = import.meta.env.DEV ? DEV_SPEECH_BASE_URL : PROD_SPEECH_BASE_URL
 
 // ========== 请求超时配置 ==========
 export const TIMEOUT = 30000

@@ -127,6 +127,12 @@
       }
     },
     {
+      "path": "pages/feeding/index",
+      "style": {
+        "navigationBarTitleText": "喂养打卡"
+      }
+    },
+    {
       "path": "pages/routine/optimize",
       "style": {
         "navigationBarTitleText": "EASY优化"

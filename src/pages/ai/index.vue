@@ -7,12 +7,16 @@
 
     <view class="section">
       <view class="section-header">
-        <text class="section-title">文字对话测试</text>
+        <text class="section-title">{{ chatMode === 'baby' ? '宝宝数据问答' : '普通文字对话' }}</text>
+      </view>
+      <view class="mode-switch">
+        <text :class="{ active: chatMode === 'baby' }" @click="switchChatMode('baby')">宝宝数据</text>
+        <text :class="{ active: chatMode === 'general' }" @click="switchChatMode('general')">普通助手</text>
       </view>
       <view class="chat-panel">
         <view class="chat-meta">
           <text class="chat-baby">当前宝宝：{{ currentBabyName }}</text>
-          <text class="chat-status">{{ currentBabyId ? '后端端口：34223' : '请先选择宝宝' }}</text>
+          <text class="chat-status">{{ currentBabyId ? (chatMode === 'baby' ? 'Baby-EgoLife数据链路' : '普通对话链路') : '请先选择宝宝' }}</text>
         </view>
 
         <view v-if="messages.length" class="chat-list">
@@ -22,7 +26,7 @@
             class="chat-item"
             :class="item.role === 'user' ? 'is-user' : 'is-ai'"
           >
-            <text class="chat-role">{{ item.role === 'user' ? '我' : 'Gemma' }}</text>
+            <text class="chat-role">{{ item.role === 'user' ? '我' : (chatMode === 'baby' ? '宝宝数据助手' : 'Gemma') }}</text>
             <text class="chat-text">{{ item.content }}</text>
             <text v-if="item.time" class="chat-time">{{ item.time }}</text>
           </view>
@@ -44,7 +48,7 @@
             class="composer-input"
             maxlength="500"
             auto-height
-            placeholder="输入一段文字，直接测试 Gemma4:latest 的回复质量"
+            :placeholder="chatMode === 'baby' ? '例如：宝宝今天睡了多久？' : '输入一段文字，测试普通助手回复'"
           />
           <button class="send-btn" :disabled="sending || !canSend" @click="handleSend">
             {{ sending ? '发送中...' : '发送' }}
@@ -93,12 +97,14 @@ import {
   removeVoice,
 } from '@/services/voice'
 import type { ChatMessage, VoiceCloneInfo } from '@/api/voice'
+import { askBabyData, getBabyQaHistory } from '@/api/egolife'
 
 const babyStore = useBabyStore()
 
 const voices = ref<VoiceCloneInfo[]>([])
 const draft = ref('')
 const sending = ref(false)
+const chatMode = ref<'baby' | 'general'>('baby')
 const messages = ref<Array<{ id: string; role: string; content: string; time: string }>>([])
 
 const currentBaby = computed(() => babyStore.currentBaby)
@@ -132,13 +138,21 @@ async function loadChatHistory() {
   }
 
   try {
+    if (chatMode.value === 'baby') {
+      const history = await getBabyQaHistory(currentBabyId.value, { page: 1, limit: 20 })
+      const items = Array.isArray(history?.items) ? history.items : []
+      messages.value = items.slice().reverse().flatMap((item: any, index: number) => {
+        const time = formatTime(item.created_at || item.timestamp)
+        return [
+          { id: `qa-q-${item.id || index}`, role: 'user', content: item.question || item.query || '', time },
+          { id: `qa-a-${item.id || index}`, role: 'assistant', content: item.answer || item.reply || item.response || '', time },
+        ]
+      }).filter(item => !!item.content)
+      return
+    }
     const history = await getChatHistory(currentBabyId.value, undefined, 1, 20)
     const items = Array.isArray(history?.items) ? history.items : []
-    messages.value = items
-      .slice()
-      .reverse()
-      .map(normalizeMessage)
-      .filter(item => !!item.content)
+    messages.value = items.slice().reverse().map(normalizeMessage).filter(item => !!item.content)
   } catch {
     messages.value = []
   }
@@ -180,6 +194,13 @@ function fillPrompt(text: string) {
   draft.value = text
 }
 
+function switchChatMode(mode: 'baby' | 'general') {
+  if (chatMode.value === mode) return
+  chatMode.value = mode
+  messages.value = []
+  loadChatHistory()
+}
+
 async function handleSend() {
   if (!canSend.value || sending.value) return
 
@@ -196,11 +217,16 @@ async function handleSend() {
   sending.value = true
 
   try {
-    const result = await sendMessage(babyId, message)
+    const result = chatMode.value === 'baby'
+      ? await askBabyData(babyId, message)
+      : await sendMessage(babyId, message)
+    const reply = chatMode.value === 'baby'
+      ? result?.answer || result?.reply || result?.response || result?.text
+      : result?.reply
     messages.value.push({
       id: `local-ai-${Date.now()}`,
       role: 'assistant',
-      content: result.reply || '模型未返回内容',
+      content: reply || '模型未返回内容',
       time: formatTime(new Date().toISOString()),
     })
   } catch (error: any) {
@@ -265,6 +291,26 @@ function confirmDelete(voice: VoiceCloneInfo) {
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16rpx; }
 .section-title { display: block; font-size: 32rpx; font-weight: 700; color: #333; margin-bottom: 16rpx; }
 .section-action { color: #0f766e; font-size: 26rpx; padding: 4rpx 0; }
+
+.mode-switch {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.mode-switch text {
+  padding: 12rpx 22rpx;
+  border-radius: 999rpx;
+  background: #e5e7eb;
+  color: #64748b;
+  font-size: 24rpx;
+}
+
+.mode-switch text.active {
+  background: #ccfbf1;
+  color: #0f766e;
+  font-weight: 700;
+}
 
 .chat-panel {
   background: #fff;

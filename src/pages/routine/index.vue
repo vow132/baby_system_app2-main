@@ -11,6 +11,14 @@
       <view class="hero-tag">EASY作息</view>
     </view>
 
+    <view class="feeding-entry" @click="goFeeding">
+      <view>
+        <text class="feeding-entry-title">喂养打卡</text>
+        <text class="feeding-entry-desc">记录奶量、时长、辅食和拍嗝情况</text>
+      </view>
+      <u-icon name="arrow-right" size="18" color="#f97316" />
+    </view>
+
     <view class="section">
       <view class="section-head">
         <view>
@@ -22,7 +30,7 @@
         <view class="age-tabs">
           <view
             class="age-tab"
-            v-for="template in ageTemplates"
+            v-for="template in displayAgeTemplates"
             :key="template.key"
             :class="{ active: template.key === selectedTemplateKey }"
             @click="selectTemplate(template.key)"
@@ -39,7 +47,7 @@
         <text class="generate-title">今日EASY日程</text>
         <text class="generate-desc">结合月龄模板、历史行为和当前目标自动生成</text>
       </view>
-      <u-button type="primary" text="生成今日计划" shape="circle" size="small" :loading="generating" @click="generateEasyPlan" />
+      <u-button type="primary" text="使用该月龄计划" shape="circle" size="small" :loading="generating" @click="generateEasyPlan" />
     </view>
 
     <view class="section">
@@ -48,11 +56,17 @@
           <text class="section-title">作息日程展示</text>
           <text class="section-desc">{{ scheduleSource }}</text>
         </view>
-        <text class="section-action" @click="savePlanToBackend">保存提醒</text>
+        <view class="section-actions">
+          <text class="section-action secondary" @click="openCreateSchedule">新增日程</text>
+          <text class="section-action" @click="savePlanToBackend">设为我的计划</text>
+        </view>
       </view>
 
       <view class="timeline">
-        <view class="timeline-item" v-for="item in displaySchedule" :key="item.time + item.activity">
+        <view v-if="!displaySchedule.length" class="empty-schedule">
+          暂无该月龄日程，请检查Baby-EgoLife服务后重试
+        </view>
+        <view class="timeline-item" v-for="item in displaySchedule" :key="`${item.personal ? 'personal' : 'global'}-${item.id || item.time}-${item.activity}`">
           <view class="time-block">
             <text class="time-text">{{ item.time }}</text>
           </view>
@@ -68,6 +82,10 @@
             <view class="remind-row">
               <u-icon name="bell" size="14" color="#ff9900" />
               <text>{{ item.reminder }}</text>
+            </view>
+            <view class="schedule-actions">
+              <text @click.stop="openEditSchedule(item)">{{ item.personal ? '编辑' : '复制并编辑' }}</text>
+              <text v-if="item.personal" class="danger" @click.stop="removeScheduleItem(item)">删除</text>
             </view>
           </view>
         </view>
@@ -93,6 +111,103 @@
         </view>
       </view>
     </view>
+
+    <view v-if="scheduleFormVisible" class="schedule-form-mask" @click="closeScheduleForm">
+      <view class="schedule-form-card" @click.stop>
+        <view class="schedule-form-head">
+          <view>
+            <text class="schedule-form-title">{{ scheduleFormTitle }}</text>
+            <text class="schedule-form-desc">{{ scheduleFormDescription }}</text>
+          </view>
+          <text class="schedule-form-close" @click="closeScheduleForm">×</text>
+        </view>
+
+        <view class="schedule-field">
+          <text class="schedule-field-label">时间范围</text>
+          <view class="schedule-time-row">
+            <view
+              class="schedule-time-control"
+              hover-class="schedule-time-control--active"
+              @click="openScheduleTimePicker('start')"
+            >
+              <view class="schedule-time-picker">
+                <text class="schedule-time-caption">开始：</text>
+                <text class="schedule-time-value">{{ scheduleForm.startTime }}</text>
+                <u-icon name="arrow-down" size="13" color="#94a3b8" />
+              </view>
+            </view>
+            <view
+              class="schedule-time-control"
+              hover-class="schedule-time-control--active"
+              @click="openScheduleTimePicker('end')"
+            >
+              <view class="schedule-time-picker">
+                <text class="schedule-time-caption">结束：</text>
+                <text class="schedule-time-value">{{ scheduleForm.endTime }}</text>
+                <u-icon name="arrow-down" size="13" color="#94a3b8" />
+              </view>
+            </view>
+          </view>
+          <text class="schedule-field-hint">{{ scheduleTimeHint }}</text>
+        </view>
+
+        <view class="schedule-field">
+          <text class="schedule-field-label">活动名称</text>
+          <input
+            v-model="scheduleForm.activity"
+            class="schedule-input"
+            :disabled="scheduleFormMode !== 'create'"
+            placeholder="例如 上午加餐"
+            maxlength="40"
+          />
+          <text v-if="scheduleFormMode !== 'create'" class="schedule-field-hint">已有日程暂不修改名称，避免产生重复模板</text>
+        </view>
+
+        <view class="schedule-field">
+          <text class="schedule-field-label">日程类型</text>
+          <picker
+            :range="scheduleTypeOptions"
+            range-key="label"
+            :value="scheduleTypeIndex"
+            :disabled="scheduleFormMode !== 'create'"
+            @change="handleScheduleTypeChange"
+          >
+            <view class="schedule-input schedule-picker">
+              <text>{{ scheduleTypeOptions[scheduleTypeIndex].label }}</text>
+              <u-icon name="arrow-down" size="14" color="#94a3b8" />
+            </view>
+          </picker>
+        </view>
+
+        <view class="schedule-field">
+          <text class="schedule-field-label">照护建议</text>
+          <textarea v-model="scheduleForm.appTip" class="schedule-textarea" placeholder="填写该日程的照护建议" maxlength="160" />
+        </view>
+
+        <view class="schedule-field">
+          <text class="schedule-field-label">提醒内容</text>
+          <textarea v-model="scheduleForm.reminder" class="schedule-textarea compact" placeholder="填写到点提醒内容" maxlength="120" />
+        </view>
+
+        <view class="schedule-form-actions">
+          <button class="schedule-form-button cancel" @click="closeScheduleForm">取消</button>
+          <button class="schedule-form-button confirm" :loading="savingSchedule" :disabled="savingSchedule" @click="submitScheduleForm">
+            {{ scheduleFormMode === 'clone' ? '复制并保存' : '保存日程' }}
+          </button>
+        </view>
+      </view>
+    </view>
+
+    <u-datetime-picker
+      :show="scheduleTimePickerVisible"
+      v-model="scheduleTimePickerValue"
+      mode="time"
+      :title="scheduleTimePickerTarget === 'start' ? '选择开始时间' : '选择结束时间'"
+      confirm-color="#ff8a00"
+      :close-on-click-overlay="false"
+      @confirm="confirmScheduleTime"
+      @cancel="cancelScheduleTime"
+    />
   </view>
 </template>
 
@@ -100,15 +215,29 @@
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { useBabyStore } from '@/stores'
-import { get, post } from '@/api/request'
-import { API } from '@/api/config'
+import {
+  createEgoSchedule,
+  deleteEgoSchedule,
+  getEgoSchedule,
+  getGrowthReminders,
+  getScheduleAgeGroups,
+  updateEgoSchedule,
+  type GrowthReminder,
+  type ScheduleEntry,
+} from '@/api/egolife'
 
 interface ScheduleItem {
+  id?: number
+  ageGroup?: string
   time: string
   activity: string
   type: 'eat' | 'sleep' | 'active' | 'care'
+  sourceType?: string
   appTip: string
+  appPush?: string
   reminder: string
+  personal?: boolean
+  raw?: ScheduleEntry
 }
 
 interface AgeTemplate {
@@ -125,8 +254,34 @@ const selectedAge = ref(11)
 const selectedTemplateKey = ref('7-12')
 const generatedSchedule = ref<ScheduleItem[]>([])
 const backendSchedule = ref<ScheduleItem[]>([])
+const globalScheduleEntries = ref<ScheduleEntry[]>([])
+const personalScheduleEntries = ref<ScheduleEntry[]>([])
+const reminderItems = ref<GrowthReminder[]>([])
+const availableAgeGroups = ref<string[]>([])
 const generating = ref(false)
-const scheduleSource = ref('默认展示月龄标准模板，可点击生成今日计划')
+const savingSchedule = ref(false)
+const scheduleFormVisible = ref(false)
+const scheduleFormMode = ref<'create' | 'edit' | 'clone'>('create')
+const editingSchedule = ref<ScheduleItem | null>(null)
+const scheduleTimePickerVisible = ref(false)
+const scheduleTimePickerTarget = ref<'start' | 'end'>('start')
+const scheduleTimePickerValue = ref('09:00')
+const scheduleForm = ref({
+  startTime: '09:00',
+  endTime: '09:30',
+  activity: '',
+  type: 'care' as ScheduleItem['type'],
+  appTip: '',
+  reminder: '',
+})
+const scheduleTypeOptions: Array<{ label: string; value: ScheduleItem['type'] }> = [
+  { label: '喂养', value: 'eat' },
+  { label: '睡眠', value: 'sleep' },
+  { label: '活动', value: 'active' },
+  { label: '护理', value: 'care' },
+]
+const scheduleSource = ref('正在读取Baby-EgoLife日程')
+const scheduleCacheKey = computed(() => `egolife_schedule_${babyStore.currentBaby?.id || 0}_${selectedTemplateKey.value}`)
 
 const ageTemplates: AgeTemplate[] = [
   {
@@ -225,14 +380,38 @@ const ageTemplates: AgeTemplate[] = [
 
 const currentTemplate = computed(() => ageTemplates.find(item => item.key === selectedTemplateKey.value) || ageTemplates[2])
 const babyName = computed(() => babyStore.currentBaby?.name || '小宝贝')
-const displaySchedule = computed(() => generatedSchedule.value.length ? generatedSchedule.value : backendSchedule.value.length ? backendSchedule.value : currentTemplate.value.schedule)
-const nextReminders = computed(() => displaySchedule.value.slice(0, 4))
+const displayAgeTemplates = computed(() => availableAgeGroups.value.length
+  ? ageTemplates.filter(item => availableAgeGroups.value.includes(item.title))
+  : ageTemplates)
+const displaySchedule = computed(() => generatedSchedule.value.length ? generatedSchedule.value : backendSchedule.value)
+const scheduleTypeIndex = computed(() => Math.max(0, scheduleTypeOptions.findIndex(item => item.value === scheduleForm.value.type)))
+const scheduleFormTitle = computed(() => {
+  if (scheduleFormMode.value === 'clone') return '复制为个人日程'
+  if (scheduleFormMode.value === 'edit') return '编辑个人日程'
+  return '新增个人日程'
+})
+const scheduleFormDescription = computed(() => scheduleFormMode.value === 'clone'
+  ? '公共模板不会被修改，将为当前宝宝创建一条可编辑的个人日程'
+  : `保存到${currentTemplate.value.title}个人计划`)
+const scheduleTimeHint = computed(() => {
+  if (scheduleForm.value.startTime === scheduleForm.value.endTime) return '开始和结束时间不能相同'
+  if (clockToMinutes(scheduleForm.value.endTime) < clockToMinutes(scheduleForm.value.startTime)) return '结束时间早于开始时间，将按次日计算'
+  return `保存为 ${buildScheduleTimeRange()}`
+})
+const nextReminders = computed(() => reminderItems.value.slice(0, 4).map(item => row(
+  item.time_range || item.start_hhmm || '--:--',
+  item.activity || '作息提醒',
+  normalizeType(item.type),
+  item.app_tip || item.message || '请按宝宝当前状态灵活调整',
+  item.reminder || item.app_push || item.message || '节点提醒',
+)))
 
 onShow(async () => {
   if (!babyStore.currentBaby) await babyStore.fetchBabyList()
   selectedAge.value = getBabyAgeMonth()
   selectedTemplateKey.value = getTemplateKeyByAge(selectedAge.value)
-  loadTodayRoutine()
+  generatedSchedule.value = []
+  await Promise.all([loadAgeGroups(), loadTodayRoutine(), loadGrowthReminderList()])
 })
 
 function row(time: string, activity: string, type: ScheduleItem['type'], appTip: string, reminder: string): ScheduleItem {
@@ -259,25 +438,85 @@ function selectTemplate(key: string) {
   const tpl = ageTemplates.find(item => item.key === key)
   if (tpl) selectedAge.value = Math.min(Math.max(selectedAge.value, tpl.min), tpl.max)
   generatedSchedule.value = []
-  scheduleSource.value = '已切换月龄标准模板，可点击生成今日计划'
+  scheduleSource.value = '正在读取所选月龄日程'
+  loadTodayRoutine()
+  loadGrowthReminderList()
+}
+
+async function loadAgeGroups() {
+  if (!babyStore.currentBaby) return
+  try {
+    availableAgeGroups.value = await getScheduleAgeGroups(babyStore.currentBaby.id)
+  } catch {
+    availableAgeGroups.value = []
+  }
+}
+
+function mapScheduleEntry(item: ScheduleEntry): ScheduleItem {
+  return {
+    id: item.id,
+    ageGroup: item.age_group,
+    time: item.time_range || '--:--',
+    activity: item.activity || '作息安排',
+    type: normalizeType(item.type),
+    sourceType: item.type,
+    appTip: item.appTip || item.app_tip || '请结合宝宝当前状态灵活调整',
+    appPush: item.app_push,
+    reminder: item.reminder || item.app_push || '节点提醒',
+    personal: !!(item.family_id || item.device_sn || item.baby_id),
+    raw: item,
+  }
+}
+
+function mergeScheduleEntries(items: ScheduleEntry[]): ScheduleEntry[] {
+  const validItems = items.filter((item) => {
+    const timeRange = String(item.time_range || '').trim()
+    const activity = String(item.activity || '').trim()
+    return !!activity && /^(?:[01]?\d|2[0-3]):[0-5]\d-.+/.test(timeRange)
+  })
+  const globals = validItems.filter(item => !(item.family_id || item.device_sn || item.baby_id))
+  const personals = validItems.filter(item => !!(item.family_id || item.device_sn || item.baby_id))
+  globalScheduleEntries.value = globals
+  personalScheduleEntries.value = personals
+
+  // Personal copies replace matching public templates; other public entries stay visible.
+  const unmatchedGlobals = globals.slice()
+  personals.forEach((personal) => {
+    const index = unmatchedGlobals.findIndex(global => scheduleSignature(global) === scheduleSignature(personal))
+    if (index >= 0) unmatchedGlobals.splice(index, 1)
+  })
+  return [...personals, ...unmatchedGlobals]
+    .sort((a, b) => (a.time_range || '').localeCompare(b.time_range || ''))
 }
 
 async function loadTodayRoutine() {
   if (!babyStore.currentBaby) return
+  globalScheduleEntries.value = []
+  personalScheduleEntries.value = []
   try {
-    const res = await get(API.ROUTINE.TODAY(babyStore.currentBaby.id))
-    if (res.code === 0 && Array.isArray(res.data) && res.data.length) {
-      backendSchedule.value = res.data.map((item: any) => row(
-        item.time_slot?.slice(0, 5) || '--:--',
-        item.activity_name || item.template_name || '作息安排',
-        normalizeType(item.activity_type),
-        item.description || '今日已生成作息节点',
-        item.reminder_enabled ? `提前${item.reminder_before_min || 10}分钟提醒` : '节点提醒'
-      ))
-      scheduleSource.value = '已读取后端今日作息'
-    }
-  } catch (error) {
-    backendSchedule.value = []
+    const result = await getEgoSchedule(babyStore.currentBaby.id, {
+      age_group: currentTemplate.value.title,
+      grouped: false,
+    })
+    backendSchedule.value = mergeScheduleEntries(result.items).map(mapScheduleEntry)
+    uni.setStorageSync(scheduleCacheKey.value, backendSchedule.value)
+    scheduleSource.value = backendSchedule.value.some(item => item.personal)
+      ? '已读取宝宝个性化日程'
+      : '已读取Baby-EgoLife月龄日程'
+  } catch {
+    const cached = uni.getStorageSync(scheduleCacheKey.value)
+    backendSchedule.value = Array.isArray(cached) ? cached : []
+    scheduleSource.value = backendSchedule.value.length ? '网络异常，显示上次同步日程' : '日程加载失败，请稍后重试'
+  }
+}
+
+async function loadGrowthReminderList() {
+  if (!babyStore.currentBaby) return
+  try {
+    const data = await getGrowthReminders(babyStore.currentBaby.id)
+    reminderItems.value = Array.isArray(data?.items) ? data.items : []
+  } catch {
+    reminderItems.value = []
   }
 }
 
@@ -288,55 +527,283 @@ async function generateEasyPlan() {
   }
   generating.value = true
   try {
-    const res = await post(API.ROUTINE.EASY_OPTIMIZE, {
-      baby_id: babyStore.currentBaby.id,
-      age_month: selectedAge.value,
-      analysis_days: 7,
-    })
-    const optimized = (res.code === 0 && res.data?.optimized_routines) ? res.data.optimized_routines : []
-    if (optimized.length) {
-      generatedSchedule.value = optimized.map((item: any) => row(
-        item.time_slot?.slice(0, 5) || '--:--',
-        item.activity_name || item.template_name || 'EASY节点',
-        normalizeType(item.activity_type),
-        item.description || 'AI优化节点',
-        item.reminder_enabled ? `提前${item.reminder_before_min || 10}分钟提醒` : '节点提醒'
-      ))
-      scheduleSource.value = '已结合历史行为生成AI优化日程'
-    } else {
-      generatedSchedule.value = currentTemplate.value.schedule
-      scheduleSource.value = '后端优化待完善，当前使用月龄标准模板生成'
+    await loadTodayRoutine()
+    generatedSchedule.value = backendSchedule.value.map(item => ({ ...item }))
+    if (!generatedSchedule.value.length) {
+      uni.showToast({ title: '该月龄暂无可用计划', icon: 'none' })
+      return
     }
-    uni.showToast({ title: '已生成今日计划', icon: 'success' })
+    scheduleSource.value = `已选择${currentTemplate.value.title}计划，确认后可设为我的计划`
+    uni.showToast({ title: '已选择月龄计划', icon: 'success' })
   } finally {
     generating.value = false
   }
 }
 
+function scheduleSignature(item: Pick<ScheduleEntry, 'activity' | 'type'>) {
+  return `${String(item.type || '').trim()}|${String(item.activity || '').trim()}`
+}
+
+function getMissingPersonalEntries() {
+  const personalCounts = new Map<string, number>()
+  personalScheduleEntries.value.forEach((item) => {
+    const key = scheduleSignature(item)
+    personalCounts.set(key, (personalCounts.get(key) || 0) + 1)
+  })
+  return globalScheduleEntries.value.filter((item) => {
+    const key = scheduleSignature(item)
+    const remaining = personalCounts.get(key) || 0
+    if (!remaining) return true
+    personalCounts.set(key, remaining - 1)
+    return false
+  })
+}
+
 async function savePlanToBackend() {
-  if (!babyStore.currentBaby) return
-  const today = new Date().toISOString().split('T')[0]
-  const target = displaySchedule.value
-  let success = 0
-  for (const item of target) {
-    const startTime = normalizeStartTime(item.time)
-    if (!startTime) continue
-    const res = await post(API.ROUTINE.CREATE, {
-      baby_id: babyStore.currentBaby.id,
-      template_name: `${currentTemplate.value.title}EASY作息`,
-      activity_name: item.activity,
-      activity_type: item.type,
-      time_slot: startTime,
-      duration_min: estimateDuration(item.time),
-      description: item.appTip,
-      effective_date: today,
-      reminder_enabled: 1,
-      reminder_before_min: 10,
-    }, { showError: false })
-    if (res.code === 0) success += 1
+  if (!babyStore.currentBaby || !displaySchedule.value.length) return
+  const sourceEntries = getMissingPersonalEntries()
+  if (personalScheduleEntries.value.length && !sourceEntries.length) {
+    uni.showToast({ title: '当前宝宝已有个人计划，请直接编辑', icon: 'none' })
+    return
   }
-  uni.showToast({ title: success ? `已保存${success}个提醒` : '后端待接入，已保留页面计划', icon: 'none' })
-  loadTodayRoutine()
+  if (!sourceEntries.length) {
+    uni.showToast({ title: '当前没有可保存的有效日程', icon: 'none' })
+    return
+  }
+  const confirmed = await new Promise<boolean>((resolve) => {
+    uni.showModal({
+      title: '设为我的计划',
+      content: `将保存${sourceEntries.length}个日程节点，是否继续？`,
+      success: result => resolve(result.confirm),
+      fail: () => resolve(false),
+    })
+  })
+  if (!confirmed) return
+
+  let success = 0
+  for (const item of sourceEntries) {
+    try {
+      await createEgoSchedule(babyStore.currentBaby.id, {
+        age_group: item.age_group || currentTemplate.value.title,
+        time_range: item.time_range,
+        activity: item.activity,
+        type: item.type,
+        appTip: item.appTip || item.app_tip,
+        app_push: item.app_push || item.reminder,
+        reminder: item.reminder,
+        sleep_duration_hours: item.sleep_duration_hours,
+      })
+      success += 1
+    } catch {
+      // Continue saving remaining entries; a retry only submits nodes still missing.
+    }
+  }
+  generatedSchedule.value = []
+  uni.showToast({
+    title: success ? `已保存${success}个日程节点` : '保存失败，请稍后重试',
+    icon: success ? 'success' : 'none',
+  })
+  await Promise.all([loadTodayRoutine(), loadGrowthReminderList()])
+}
+
+function resetScheduleForm() {
+  scheduleForm.value = {
+    startTime: '09:00',
+    endTime: '09:30',
+    activity: '',
+    type: 'care',
+    appTip: '',
+    reminder: '',
+  }
+}
+
+function openCreateSchedule() {
+  if (!babyStore.currentBaby) {
+    uni.showToast({ title: '请先添加宝宝', icon: 'none' })
+    return
+  }
+  editingSchedule.value = null
+  scheduleFormMode.value = 'create'
+  resetScheduleForm()
+  scheduleFormVisible.value = true
+}
+
+function openEditSchedule(item: ScheduleItem) {
+  if (!babyStore.currentBaby || !item.raw) return
+  editingSchedule.value = item
+  scheduleFormMode.value = item.personal ? 'edit' : 'clone'
+  const selectedTime = parseScheduleTimeRange(item.time)
+  scheduleForm.value = {
+    startTime: selectedTime.startTime,
+    endTime: selectedTime.endTime,
+    activity: item.activity,
+    type: item.type,
+    appTip: item.appTip,
+    reminder: item.reminder,
+  }
+  scheduleFormVisible.value = true
+}
+
+function closeScheduleForm() {
+  if (savingSchedule.value) return
+  scheduleTimePickerVisible.value = false
+  scheduleFormVisible.value = false
+  editingSchedule.value = null
+}
+
+function normalizeClock(value: string) {
+  const [hour = '0', minute = '0'] = String(value || '').split(':')
+  return `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`
+}
+
+function parseScheduleTimeRange(value: string) {
+  const times = String(value || '').match(/\d{1,2}:\d{2}/g) || []
+  return {
+    startTime: times[0] ? normalizeClock(times[0]) : '09:00',
+    endTime: times[1] ? normalizeClock(times[1]) : '09:30',
+  }
+}
+
+function clockToMinutes(value: string) {
+  const [hour, minute] = value.split(':').map(Number)
+  return hour * 60 + minute
+}
+
+function buildScheduleTimeRange() {
+  const { startTime, endTime } = scheduleForm.value
+  return clockToMinutes(endTime) < clockToMinutes(startTime)
+    ? `${startTime}-次日${endTime}`
+    : `${startTime}-${endTime}`
+}
+
+function handleStartTimeChange(event: any) {
+  scheduleForm.value.startTime = normalizeClock(String(event?.detail?.value || '09:00'))
+}
+
+function handleEndTimeChange(event: any) {
+  scheduleForm.value.endTime = normalizeClock(String(event?.detail?.value || '09:30'))
+}
+function openScheduleTimePicker(target: 'start' | 'end') {
+  scheduleTimePickerTarget.value = target
+  scheduleTimePickerValue.value = target === 'start'
+    ? scheduleForm.value.startTime
+    : scheduleForm.value.endTime
+  scheduleTimePickerVisible.value = true
+}
+
+function confirmScheduleTime({ value }: { value: string }) {
+  const selectedTime = normalizeClock(value || scheduleTimePickerValue.value)
+  if (scheduleTimePickerTarget.value === 'start') {
+    scheduleForm.value.startTime = selectedTime
+  } else {
+    scheduleForm.value.endTime = selectedTime
+  }
+  scheduleTimePickerValue.value = selectedTime
+  scheduleTimePickerVisible.value = false
+}
+
+function cancelScheduleTime() {
+  scheduleTimePickerVisible.value = false
+}
+
+function handleScheduleTypeChange(event: any) {
+  if (scheduleFormMode.value !== 'create') return
+  const index = Number(event?.detail?.value || 0)
+  scheduleForm.value.type = scheduleTypeOptions[index]?.value || 'care'
+}
+
+function serializeScheduleType(type: ScheduleItem['type'], originalType?: string) {
+  if (originalType && normalizeType(originalType) === type) return originalType
+  const map: Record<ScheduleItem['type'], string> = {
+    eat: 'eat',
+    sleep: 'sleep',
+    active: 'active',
+    care: 'awake',
+  }
+  return map[type]
+}
+
+function getScheduleSaveError(error: any) {
+  const raw = String(error?.message || '日程保存失败')
+  if (/404|Not Found/i.test(raw)) return '8122没有找到POST /schedule，请联系后端检查新增日程接口是否已部署。'
+  if (/500|Internal Server Error/i.test(raw)) return '8122新增日程时发生服务器内部错误，请将本次操作交给后端查看日志。'
+  if (/request:fail|网络|timeout|超时/i.test(raw)) return '无法连接8122，请检查网络和测试服务是否运行。'
+  const cleaned = raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  return cleaned.length > 100 ? `${cleaned.slice(0, 100)}…` : cleaned
+}
+
+async function submitScheduleForm() {
+  if (!babyStore.currentBaby || savingSchedule.value) return
+  const babyId = babyStore.currentBaby.id
+  const activity = scheduleForm.value.activity.trim()
+  if (scheduleForm.value.startTime === scheduleForm.value.endTime) {
+    uni.showToast({ title: '开始和结束时间不能相同', icon: 'none' })
+    return
+  }
+  const timeRange = buildScheduleTimeRange()
+  if (!activity) {
+    uni.showToast({ title: '请填写活动名称', icon: 'none' })
+    return
+  }
+
+  const current = editingSchedule.value
+  const original = current?.raw
+  const payload = {
+    age_group: original?.age_group || currentTemplate.value.title,
+    time_range: timeRange,
+    activity,
+    type: serializeScheduleType(scheduleForm.value.type, original?.type),
+    appTip: scheduleForm.value.appTip.trim(),
+    app_push: scheduleForm.value.reminder.trim(),
+    reminder: scheduleForm.value.reminder.trim(),
+    sleep_duration_hours: original?.sleep_duration_hours,
+  }
+  const savedMode = scheduleFormMode.value
+
+  savingSchedule.value = true
+  try {
+    if (savedMode === 'edit' && current?.id) {
+      await updateEgoSchedule(babyId, current.id, payload)
+    } else {
+      await createEgoSchedule(babyId, payload)
+    }
+    scheduleFormVisible.value = false
+    editingSchedule.value = null
+    generatedSchedule.value = []
+    await Promise.all([loadTodayRoutine(), loadGrowthReminderList()])
+    uni.showToast({
+      title: savedMode === 'clone' ? '已复制为个人日程' : '日程已保存',
+      icon: 'success',
+    })
+  } catch (error: any) {
+    console.error('[routine] schedule save failed', error)
+    uni.showModal({
+      title: savedMode === 'edit' ? '编辑失败' : '新增失败',
+      content: getScheduleSaveError(error),
+      showCancel: false,
+    })
+  } finally {
+    savingSchedule.value = false
+  }
+}
+
+function removeScheduleItem(item: ScheduleItem) {
+  if (!babyStore.currentBaby || !item.id) return
+  uni.showModal({
+    title: '删除日程',
+    content: `确定删除“${item.activity}”吗？`,
+    confirmColor: '#ef4444',
+    success: async result => {
+      if (!result.confirm) return
+      await deleteEgoSchedule(babyStore.currentBaby!.id, item.id!)
+      await Promise.all([loadTodayRoutine(), loadGrowthReminderList()])
+      uni.showToast({ title: '已删除', icon: 'success' })
+    },
+  })
+}
+
+function goFeeding() {
+  uni.navigateTo({ url: '/pages/feeding/index' })
 }
 
 function normalizeStartTime(time: string) {
@@ -455,10 +922,21 @@ function getTypeIcon(type: ScheduleItem['type']) {
   margin-top: 6rpx;
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  flex-shrink: 0;
+}
+
 .section-action {
   color: #ff9900;
   font-size: 26rpx;
   padding-top: 4rpx;
+}
+
+.section-action.secondary {
+  color: #667eea;
 }
 
 .age-scroll {
@@ -675,5 +1153,245 @@ function getTypeIcon(type: ScheduleItem['type']) {
   color: #94a3b8;
   line-height: 1.4;
   margin-top: 6rpx;
+}
+.feeding-entry {
+  margin: 0 0 24rpx;
+  padding: 24rpx 28rpx;
+  border-radius: 20rpx;
+  background: #fff7ed;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.feeding-entry-title {
+  display: block;
+  color: #c2410c;
+  font-size: 29rpx;
+  font-weight: 800;
+}
+
+.feeding-entry-desc {
+  display: block;
+  margin-top: 6rpx;
+  color: #9a6b4f;
+  font-size: 23rpx;
+}
+
+.empty-schedule {
+  padding: 48rpx 20rpx;
+  color: #9aa3b5;
+  text-align: center;
+  font-size: 25rpx;
+}
+
+.schedule-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 24rpx;
+  margin-top: 16rpx;
+  color: #667eea;
+  font-size: 24rpx;
+}
+
+.schedule-actions .danger {
+  color: #ef4444;
+}
+
+.schedule-form-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(15, 23, 42, .46);
+}
+
+.schedule-form-card {
+  width: 100%;
+  max-height: 88vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 30rpx 30rpx calc(30rpx + env(safe-area-inset-bottom));
+  border-radius: 30rpx 30rpx 0 0;
+  background: #fff;
+}
+
+.schedule-form-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24rpx;
+  margin-bottom: 26rpx;
+}
+
+.schedule-form-title {
+  display: block;
+  color: #1f2937;
+  font-size: 34rpx;
+  font-weight: 800;
+}
+
+.schedule-form-desc {
+  display: block;
+  margin-top: 8rpx;
+  color: #94a3b8;
+  font-size: 22rpx;
+  line-height: 1.45;
+}
+
+.schedule-form-close {
+  padding: 0 6rpx;
+  color: #94a3b8;
+  font-size: 44rpx;
+  line-height: 1;
+}
+
+.schedule-field {
+  margin-bottom: 22rpx;
+}
+
+.schedule-field-label {
+  display: block;
+  margin-bottom: 10rpx;
+  color: #475569;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.schedule-field-hint {
+  display: block;
+  margin-top: 8rpx;
+  color: #94a3b8;
+  font-size: 21rpx;
+}
+
+.schedule-time-row {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.schedule-time-row picker {
+  flex: 1;
+}
+
+.schedule-time-picker {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 82rpx;
+  box-sizing: border-box;
+  padding: 0 18rpx;
+  border: 2rpx solid #e5e7eb;
+  border-radius: 16rpx;
+  background: #f8fafc;
+}
+
+.schedule-time-caption {
+  margin-right: 12rpx;
+  color: #94a3b8;
+  font-size: 22rpx;
+}
+
+.schedule-time-value {
+  flex: 1;
+  color: #1f2937;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.schedule-time-separator {
+  color: #94a3b8;
+  font-size: 23rpx;
+}
+
+.schedule-time-row {
+  gap: 16rpx;
+}
+
+.schedule-time-control {
+  flex: 1;
+  min-width: 0;
+}
+
+.schedule-time-control--active .schedule-time-picker {
+  border-color: #ff9900;
+  background: #fff7ed;
+}
+
+.schedule-time-picker {
+  height: 86rpx;
+  padding: 0 16rpx;
+}
+
+.schedule-time-caption {
+  flex-shrink: 0;
+  margin-right: 0;
+  color: #64748b;
+}
+.schedule-input,
+.schedule-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 2rpx solid #e5e7eb;
+  border-radius: 16rpx;
+  background: #f8fafc;
+  color: #1f2937;
+  font-size: 26rpx;
+}
+
+.schedule-input {
+  height: 82rpx;
+  padding: 0 22rpx;
+}
+
+.schedule-input[disabled] {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.schedule-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.schedule-textarea {
+  height: 150rpx;
+  padding: 20rpx 22rpx;
+  line-height: 1.5;
+}
+
+.schedule-textarea.compact {
+  height: 120rpx;
+}
+
+.schedule-form-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 30rpx;
+}
+
+.schedule-form-button {
+  flex: 1;
+  height: 84rpx;
+  border-radius: 18rpx;
+  font-size: 27rpx;
+  line-height: 84rpx;
+}
+
+.schedule-form-button::after {
+  border: 0;
+}
+
+.schedule-form-button.cancel {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.schedule-form-button.confirm {
+  color: #fff;
+  background: linear-gradient(135deg, #ff9900, #f97316);
 }
 </style>

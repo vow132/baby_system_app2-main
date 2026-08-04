@@ -153,9 +153,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { get, post } from '@/api/request'
+import { get } from '@/api/request'
 import { API } from '@/api/config'
 import { exportBabyData } from '@/api/baby'
+import {
+  createEgoEvent,
+  getDaySummaries,
+  getEgoEvents,
+  getEgoMemory,
+  getEgoSchedule,
+} from '@/api/egolife'
 import { useBabyStore } from '@/stores'
 
 type ArchiveType = 'all' | 'sensor' | 'voice' | 'routine' | 'milestone' | 'moment' | 'manual'
@@ -253,26 +260,30 @@ onShow(async () => {
 async function loadArchive() {
   if (!babyStore.currentBaby) return
   const babyId = babyStore.currentBaby.id
-  const query = queryText.value.trim() || '全部'
+  const query = queryText.value.trim()
+  const ageGroup = resolveAgeGroup(babyStore.currentBaby.current_age_months ?? 11)
 
   try {
     const results = await Promise.allSettled([
-      post(API.VOICE.LTM_QUERY, { baby_id: babyId, query, limit: 30 }, { showError: false }),
+      getEgoMemory(babyId, query ? { q: query, limit: 30 } : { limit: 30 }),
       get(`${API.VOICE.HISTORY}?baby_id=${babyId}&page=1&page_size=20`, undefined, { showError: false }),
-      get(`${API.SENSOR.EVENTS}?baby_id=${babyId}&page=1&page_size=20`, undefined, { showError: false }),
-      get(`${API.ROUTINE.LIST}?baby_id=${babyId}&page=1&page_size=20`, undefined, { showError: false }),
+      getEgoEvents(babyId, { page: 1, page_size: 30, keyword: query || undefined }),
+      getEgoSchedule(babyId, { age_group: ageGroup, grouped: false }),
+      getDaySummaries(babyId, { limit: 7 }),
     ])
 
-    const ltmRes = results[0].status === 'fulfilled' ? results[0].value : null
+    const memoryData = results[0].status === 'fulfilled' ? results[0].value : null
     const chatRes = results[1].status === 'fulfilled' ? results[1].value : null
-    const eventRes = results[2].status === 'fulfilled' ? results[2].value : null
-    const routineRes = results[3].status === 'fulfilled' ? results[3].value : null
+    const eventData = results[2].status === 'fulfilled' ? results[2].value : null
+    const scheduleData = results[3].status === 'fulfilled' ? results[3].value : null
+    const dayData = results[4].status === 'fulfilled' ? results[4].value : null
 
     const items: ArchiveItem[] = [
-      ...normalizeMemories(ltmRes?.data),
+      ...normalizeMemories(memoryData),
       ...normalizeChats(chatRes?.data),
-      ...normalizeEvents(eventRes?.data),
-      ...normalizeRoutines(routineRes?.data),
+      ...normalizeEvents(eventData),
+      ...normalizeRoutines(scheduleData),
+      ...normalizeDaySummaries(dayData),
     ]
 
     timeline.value = mergeById(items)
@@ -282,41 +293,62 @@ async function loadArchive() {
   }
 }
 
+function resolveAgeGroup(month: number) {
+  if (month <= 3) return '0-3个月'
+  if (month <= 6) return '4-6个月'
+  if (month <= 12) return '7-12个月'
+  if (month <= 24) return '1-2岁'
+  if (month <= 36) return '2-3岁'
+  return '3-4岁'
+}
+
 async function storeMemory() {
   if (!babyStore.currentBaby || !memoryText.value.trim()) {
     uni.showToast({ title: '请输入档案内容', icon: 'none' })
     return
   }
   try {
-    const res = await post(API.VOICE.LTM_STORE, {
-      baby_id: babyStore.currentBaby.id,
-      content: memoryText.value.trim(),
-      tags: selectedTags.value,
+    await createEgoEvent(babyStore.currentBaby.id, {
+      timestamp: new Date().toISOString(),
+      text: memoryText.value.trim(),
       source: 'manual',
     })
-    if (res.code === 0) {
-      uni.showToast({ title: '已加入成长档案', icon: 'success' })
-      memoryText.value = ''
-      showManual.value = false
-      await loadArchive()
-    } else {
-      uni.showToast({ title: res.message || '保存失败', icon: 'none' })
-    }
+    uni.showToast({ title: '已加入成长档案', icon: 'success' })
+    memoryText.value = ''
+    showManual.value = false
+    await loadArchive()
   } catch (e) {
     console.error('[memory] storeMemory', e)
     uni.showToast({ title: '保存请求失败', icon: 'none' })
   }
 }
 
+function pickArchiveText(item: any, fallback: string) {
+  const candidates = [item?.text, item?.content, item?.summary, item?.description, item?.raw_text, item?.sentence]
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (value && typeof value === 'object') {
+      const nested = value.text || value.summary || value.description || value.content
+      if (typeof nested === 'string' && nested.trim()) return nested.trim()
+    }
+  }
+  return fallback
+}
+
 function normalizeMemories(data: any): ArchiveItem[] {
-  const list = Array.isArray(data) ? data : data?.memories || data?.items || []
+  const list = [
+    ...(Array.isArray(data?.l0_events) ? data.l0_events : []),
+    ...(Array.isArray(data?.l1_hour_summaries) ? data.l1_hour_summaries : []),
+    ...(Array.isArray(data?.l2_day_summaries) ? data.l2_day_summaries : []),
+  ]
+  if (!list.length && Array.isArray(data)) list.push(...data)
   return list.map((item: any, index: number) => ({
-    id: `memory-${item.id || index}`,
-    type: item.source === 'manual' ? 'manual' : normalizeType(item.source || item.type || 'voice'),
-    title: item.source === 'manual' ? '家长补充记录' : '成长记忆',
-    summary: item.content || item.content_text || item.summary || '已沉淀到宝宝成长档案',
-    time: item.created_at || item.updated_at || new Date().toISOString(),
-    tags: normalizeTags(item.tags || item.ltm_tags),
+    id: `memory-${item.event_id || item.id || index}`,
+    type: item.source === 'manual' ? 'manual' : 'sensor',
+    title: item.source === 'manual' ? '家长补充记录' : item.title || '成长记忆',
+    summary: pickArchiveText(item, '已沉淀到宝宝成长档案'),
+    time: item.timestamp || item.created_at || item.date || new Date().toISOString(),
+    tags: normalizeTags(item.tags || item.event_type || item.type),
     icon: item.source === 'manual' ? 'edit-pen-fill' : 'file-text-fill',
   }))
 }
@@ -335,18 +367,20 @@ function normalizeChats(data: any): ArchiveItem[] {
 }
 
 function normalizeEvents(data: any): ArchiveItem[] {
-  const list = Array.isArray(data) ? data : data?.items || []
-  return list.map((item: any, index: number) => ({
-    id: `sensor-${item.id || index}`,
-    type: 'sensor',
-    title: getEventTitle(item.event_level),
-    summary: item.snapshot_url || item.video_clip_url || item.gif_url
-      ? '检测到监测事件，并关联了图像或视频素材'
-      : '检测到宝宝状态变化，已记录到成长档案',
-    time: item.detected_at || item.created_at || new Date().toISOString(),
-    tags: ['监测', item.parent_handled ? '已处理' : '待查看'],
-    icon: 'heart-fill',
-  }))
+  const list = Array.isArray(data) ? data : data?.events || data?.items || []
+  return list.map((item: any, index: number) => {
+    const eventType = item.event_type || item.type || 'event'
+    const isRoutine = ['feeding', 'eat', 'sleep', 'awake', 'active', 'play', 'bath'].includes(eventType)
+    return {
+      id: `event-${item.event_id || item.id || index}`,
+      type: isRoutine ? 'routine' : 'sensor',
+      title: isRoutine ? getRoutineTitle(eventType) : item.title || '状态监测记录',
+      summary: pickArchiveText(item, '检测到宝宝状态变化，已记录到成长档案'),
+      time: item.timestamp || item.detected_at || item.created_at || new Date().toISOString(),
+      tags: ['实际记录', mapTagText(eventType)],
+      icon: isRoutine ? 'calendar-fill' : 'heart-fill',
+    } as ArchiveItem
+  })
 }
 
 function normalizeRoutines(data: any): ArchiveItem[] {
@@ -354,11 +388,24 @@ function normalizeRoutines(data: any): ArchiveItem[] {
   return list.map((item: any, index: number) => ({
     id: `routine-${item.id || index}`,
     type: 'routine',
-    title: getRoutineTitle(item.activity_type),
-    summary: item.description || `${item.time_slot || '今日'} 的作息安排已记录`,
-    time: item.created_at || new Date().toISOString(),
-    tags: ['作息', getRoutineTitle(item.activity_type)],
+    title: getRoutineTitle(item.type),
+    summary: item.appTip || item.app_tip || `${item.time_range || '今日'} 的计划日程`,
+    time: new Date().toISOString(),
+    tags: ['计划日程', getRoutineTitle(item.type)],
     icon: 'calendar-fill',
+  }))
+}
+
+function normalizeDaySummaries(data: any): ArchiveItem[] {
+  const list = Array.isArray(data) ? data : data?.items || []
+  return list.map((item: any, index: number) => ({
+    id: `day-summary-${item.date || item.id || index}`,
+    type: 'sensor',
+    title: '每日摘要',
+    summary: pickArchiveText(item, '宝宝当日行为摘要已生成'),
+    time: item.date || item.created_at || new Date().toISOString(),
+    tags: ['每日摘要'],
+    icon: 'file-text-fill',
   }))
 }
 

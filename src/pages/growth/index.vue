@@ -68,19 +68,23 @@
         <view class="section-head">
           <view>
             <text class="section-title">本周成长摘要</text>
-            <text class="section-desc">待接入成长数据 API 后自动填充</text>
+            <text class="section-desc">来自Baby-EgoLife周报、提醒与育儿建议</text>
           </view>
           <text class="section-action" @click="navigateTo('/pages/milestone/report')">详情</text>
         </view>
 
         <view class="summary-panel">
           <view class="summary-score">
-            <text class="score-value">--</text>
-            <text class="score-label">成长记录完整度</text>
+            <text class="score-value">{{ growthScore }}</text>
+            <text class="score-label">EASY覆盖率</text>
           </view>
           <view class="summary-list">
-            <view class="empty-summary">
-              <text>暂无本周摘要数据，等待后端接入</text>
+            <view v-for="item in weeklySummary" :key="item.title" class="summary-row">
+              <text class="summary-row-title">{{ item.title }}</text>
+              <text class="summary-row-desc">{{ item.desc }}</text>
+            </view>
+            <view v-if="!weeklySummary.length" class="empty-summary">
+              <text>暂无本周摘要，继续记录后会自动生成</text>
             </view>
           </view>
         </view>
@@ -123,13 +127,15 @@ import { onShow } from '@dcloudio/uni-app'
 import { useBabyStore } from '@/stores'
 import type { BabyInfo } from '@/api/baby'
 import { formatBabyAge } from '@/utils/age'
+import { getGrowthCoach, getGrowthMeta, getGrowthProfile, getGrowthReminders, getGrowthReport } from '@/api/egolife'
 
 const babyStore = useBabyStore()
 const statusBarHeight = ref(44)
 
 const weeklySummary = ref<{ title: string; desc: string; color: string }[]>([])
-
 const memoryPreview = ref<string[]>([])
+const growthScore = ref('--')
+const growthStage = ref('')
 
 const featureCards = [
   {
@@ -184,6 +190,7 @@ const babyAvatar = computed(() => babyStore.currentBaby?.avatar_url || '/static/
 const ageMonth = computed(() => babyStore.currentBaby?.current_age_months ?? 11)
 const ageText = computed(() => formatBabyAge(babyStore.currentBaby))
 const stageText = computed(() => {
+  if (growthStage.value) return growthStage.value
   const month = ageMonth.value
   if (month <= 3) return '0-3月龄'
   if (month <= 6) return '4-6月龄'
@@ -200,6 +207,7 @@ onMounted(() => {
 
 onShow(async () => {
   await babyStore.fetchBabyList()
+  await loadGrowthSummary()
 })
 
 function navigateTo(url: string) {
@@ -208,6 +216,52 @@ function navigateTo(url: string) {
 
 function selectBaby(baby: BabyInfo) {
   babyStore.setCurrentBaby(baby)
+  weeklySummary.value = []
+  memoryPreview.value = []
+  loadGrowthSummary()
+}
+
+async function loadGrowthSummary() {
+  if (!babyStore.currentBaby) return
+  const babyId = babyStore.currentBaby.id
+  const [report, reminders, coach, profile, meta] = await Promise.allSettled([
+    getGrowthReport(babyId, { period: 'week' }),
+    getGrowthReminders(babyId),
+    getGrowthCoach(babyId),
+    getGrowthProfile(babyId),
+    getGrowthMeta(babyId),
+  ])
+  const profileData = profile.status === 'fulfilled' ? profile.value : null
+  const metaData = meta.status === 'fulfilled' ? meta.value : null
+  growthStage.value = profileData?.profile?.resolved_age_group
+    || profileData?.profile?.age_group
+    || profileData?.identity?.age_group
+    || metaData?.default_age_group
+    || ''
+  const reportData = report.status === 'fulfilled' ? report.value : null
+  const easyCoverage = Number(reportData?.easy?.avg_coverage_pct ?? reportData?.easy?.coverage_pct)
+  growthScore.value = Number.isFinite(easyCoverage) ? String(Math.round(easyCoverage)) : '--'
+
+  const rows: { title: string; desc: string; color: string }[] = []
+  const highlights = Array.isArray(reportData?.highlights) ? reportData.highlights : []
+  const insights = Array.isArray(reportData?.insights) ? reportData.insights : []
+  ;[...highlights, ...insights].slice(0, 3).forEach((item: any, index) => {
+    const text = typeof item === 'string' ? item : item?.text || item?.description || item?.title
+    if (text) rows.push({ title: index === 0 ? '本周亮点' : '成长洞察', desc: text, color: '#ff8a00' })
+  })
+  if (coach.status === 'fulfilled') {
+    const coachLines = [coach.value?.coach_lines, coach.value?.lines, coach.value?.tips, coach.value?.suggestions, coach.value?.current?.tip]
+      .flatMap(value => Array.isArray(value) ? value : value ? [value] : [])
+      .map((item: any) => typeof item === 'string' ? item : item?.text || item?.message || '')
+      .filter(Boolean)
+    if (coachLines[0]) rows.push({ title: '育儿建议', desc: coachLines[0], color: '#667eea' })
+  }
+  weeklySummary.value = rows.slice(0, 4)
+
+  if (reminders.status === 'fulfilled') {
+    memoryPreview.value = (reminders.value.items || []).slice(0, 3)
+      .map(item => `${item.time_range || item.start_hhmm} · ${item.activity}`)
+  }
 }
 
 function getBabyAgeText(baby: BabyInfo) {
@@ -406,6 +460,25 @@ function calcAgeMonth(birthDate?: string | null) {
   font-size: 26rpx;
   padding-top: 4rpx;
   white-space: nowrap;
+}
+
+.summary-row {
+  padding: 10rpx 0;
+}
+
+.summary-row-title {
+  display: block;
+  color: #374151;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.summary-row-desc {
+  display: block;
+  margin-top: 4rpx;
+  color: #7c8798;
+  font-size: 23rpx;
+  line-height: 1.45;
 }
 
 .feature-list {

@@ -134,6 +134,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { get, post } from '@/api/request'
 import { API } from '@/api/config'
 import { useBabyStore } from '@/stores'
+import { getGrowthReport } from '@/api/egolife'
 
 type ReportType = 'daily' | 'weekly' | 'monthly'
 
@@ -309,11 +310,52 @@ async function loadData() {
   if (!babyStore.currentBaby) await babyStore.fetchBabyList()
   if (!babyStore.currentBaby) return
 
-  const res = await get(`${API.MILESTONE.REPORT_LIST}?baby_id=${babyStore.currentBaby.id}&report_type=${activeReportType.value}&page=1&page_size=20`, undefined, { showError: false })
-  if (res.code === 0 && res.data?.items) {
-    reports.value = filterReportsByType(res.data.items)
-    currentReport.value = reports.value[0] || null
-    isTemporaryReport.value = false
+  const babyId = babyStore.currentBaby.id
+  const growthPeriod = activeReportType.value === 'weekly'
+    ? 'week'
+    : activeReportType.value === 'monthly' ? 'month' : null
+  const [legacy, growth] = await Promise.allSettled([
+    get(`${API.MILESTONE.REPORT_LIST}?baby_id=${babyId}&report_type=${activeReportType.value}&page=1&page_size=20`, undefined, { showError: false }),
+    growthPeriod ? getGrowthReport(babyId, { period: growthPeriod }) : Promise.resolve(null),
+  ])
+
+  if (legacy.status === 'fulfilled' && legacy.value.code === 0 && legacy.value.data?.items) {
+    reports.value = filterReportsByType(legacy.value.data.items)
+  } else {
+    reports.value = []
+  }
+  const legacyCurrent = reports.value[0] || null
+  const growthCurrent = growth.status === 'fulfilled' ? normalizeGrowthReport(growth.value) : null
+  currentReport.value = growthCurrent ? { ...(legacyCurrent || {}), ...growthCurrent } : legacyCurrent
+  isTemporaryReport.value = false
+}
+
+function normalizeGrowthReport(report: any) {
+  if (!report) return null
+  const behavior = report.behavior || {}
+  const trendTotals = (Array.isArray(report.daily_trend) ? report.daily_trend : []).reduce((total: Record<string, number>, item: any) => {
+    ;['sleep', 'cry', 'danger', 'play'].forEach((key) => {
+      total[key] = (total[key] || 0) + Number(item?.[key] || 0)
+    })
+    return total
+  }, {})
+  const highlights = normalizeTextList(report.highlights)
+  const insights = normalizeTextList(report.insights)
+  const habitSuggestions = Array.isArray(report.habit?.suggestions)
+    ? report.habit.suggestions.map((item: any) => typeof item === 'string' ? item : item.reason || item.suggestion).filter(Boolean)
+    : []
+  return {
+    summary: insights[0] || highlights[0] || report.summary,
+    highlights,
+    suggestions: habitSuggestions,
+    attention: insights[1] || report.attention,
+    sleep_count: trendTotals.sleep ?? behavior.sleep ?? behavior.sleeping,
+    cry_count: trendTotals.cry ?? behavior.cry ?? behavior.crying,
+    danger_count: trendTotals.danger ?? behavior.danger,
+    play_count: trendTotals.play ?? behavior.play ?? behavior.playing,
+    easy: report.easy,
+    wow: report.wow,
+    daily_trend: report.daily_trend,
   }
 }
 

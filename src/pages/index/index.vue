@@ -208,7 +208,7 @@ import { useUserStore, useFamilyStore, useBabyStore } from '@/stores'
 import type { BabyInfo } from '@/api/baby'
 import { getDeviceList, type DeviceInfo } from '@/api/device'
 import { getSensorData, getEvents, getPassiveEventTypes, type SensorData, type MonitoringEvent, type PassiveEventType } from '@/api/monitor'
-import { getRoutineOptimize, getRoutineToday, type RoutineInfo } from '@/api/routine'
+import { getGrowthCoach, getGrowthReminders } from '@/api/egolife'
 import { getMomentTimeline, type MomentInfo } from '@/api/moment'
 import { DEFAULT_AVATAR_URL, resolveMediaUrl } from '@/common/media'
 
@@ -222,7 +222,7 @@ const deviceList = ref<DeviceInfo[]>([])
 const sensorData = ref<SensorData | null>(null)
 const events = ref<MonitoringEvent[]>([])
 const eventTypes = ref<PassiveEventType[]>([])
-const routineItems = ref<RoutineInfo[]>([])
+const routineItems = ref<Array<{ id: number; time_slot: string; template_name: string; description: string; activity_type: string }>>([])
 const routineSuggestions = ref<string[]>([])
 const recentMoments = ref<MomentInfo[]>([])
 const unreadCount = ref(0)
@@ -418,8 +418,15 @@ async function loadHomeRoutine() {
     return
   }
   try {
-    const res = await getRoutineToday(babyStore.currentBaby.id)
-    routineItems.value = res.code === 0 && Array.isArray(res.data) ? res.data : []
+    const data = await getGrowthReminders(babyStore.currentBaby.id)
+    const items = Array.isArray(data?.items) ? data.items : []
+    routineItems.value = items.slice(0, 3).map(item => ({
+      id: item.entry_id,
+      time_slot: item.time_range || item.start_hhmm || '--:--',
+      template_name: item.activity || '作息提醒',
+      description: item.message || item.app_tip || item.app_push || '请结合宝宝状态灵活调整',
+      activity_type: item.type || 'care',
+    }))
   } catch {
     routineItems.value = []
   }
@@ -431,9 +438,22 @@ async function loadRoutineAdvice() {
     return
   }
   try {
-    const res = await getRoutineOptimize(babyStore.currentBaby.id)
-    const suggestions = res.code === 0 && Array.isArray(res.data?.suggestions) ? res.data.suggestions : []
-    routineSuggestions.value = suggestions.filter(Boolean).slice(0, 2)
+    const data = await getGrowthCoach(babyStore.currentBaby.id)
+    const candidates = [
+      data?.lines,
+      data?.coach_lines,
+      data?.tips,
+      data?.suggestions,
+      data?.current?.tips,
+      data?.current?.tip,
+      data?.next?.tips,
+      data?.current?.message,
+      data?.next?.message,
+    ].flatMap(value => Array.isArray(value) ? value : value ? [value] : [])
+    routineSuggestions.value = candidates
+      .map(item => typeof item === 'string' ? item : item?.text || item?.message || item?.suggestion || '')
+      .filter(Boolean)
+      .slice(0, 2)
   } catch {
     routineSuggestions.value = []
   }

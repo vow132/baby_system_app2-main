@@ -106,99 +106,136 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { get, post } from '@/api/request'
-import { API } from '@/api/config'
+import {
+  applyGrowthHabit,
+  getGrowthCoach,
+  getGrowthEasy,
+  getGrowthHabit,
+  type EasyAnalysis,
+  type GrowthCoach,
+  type HabitAnalysis,
+} from '@/api/egolife'
 import { useBabyStore } from '@/stores'
 
 const babyStore = useBabyStore()
-const conflictResult = ref<any | null>(null)
-const optimizeResult = ref<any | null>(null)
-const conflicts = ref<any[]>([])
+const easyResult = ref<EasyAnalysis | null>(null)
+const habitResult = ref<HabitAnalysis | null>(null)
+const coachResult = ref<GrowthCoach | null>(null)
 const fixing = ref(false)
 
 const babyName = computed(() => babyStore.currentBaby?.name || '小宝贝')
-const conflictCount = computed(() => conflictResult.value?.total_conflicts ?? conflicts.value.length)
-const updatedCount = computed(() => optimizeResult.value?.optimized_routines?.length || optimizeResult.value?.updated_routines?.length || 0)
-const healthScore = computed(() => Math.max(72, 96 - conflictCount.value * 6))
+const ageGroup = computed(() => habitResult.value?.age_group || easyResult.value?.age_group || getAgeGroup())
+const deviations = computed(() => {
+  const value = habitResult.value?.deviations
+  if (Array.isArray(value)) return value
+  if (!value || typeof value !== 'object') return []
+  const significant = Array.isArray(value.significant_samples) ? value.significant_samples : []
+  if (significant.length) return significant
+  const byType = Array.isArray(value.by_type) ? value.by_type : []
+  return byType.filter(item => Number(item.early_count || 0) > 0 || Number(item.late_count || 0) > 0)
+})
+const suggestions = computed(() => Array.isArray(habitResult.value?.suggestions) ? habitResult.value!.suggestions! : [])
+const conflictCount = computed(() => deviations.value.length)
+const updatedCount = computed(() => suggestions.value.filter(item => !!item.entry_id).length)
+const healthScore = computed(() => {
+  const coverage = Number(easyResult.value?.summary?.avg_coverage_pct)
+  return Number.isFinite(coverage) ? Math.max(0, Math.min(100, Math.round(coverage))) : 0
+})
 
 const suggestionList = computed(() => {
   const result: string[] = []
-  const conflictSuggestions = conflictResult.value?.suggestions
-  const optimizeSuggestions = optimizeResult.value?.suggestions
-  const changes = optimizeResult.value?.changes
-  if (Array.isArray(conflictSuggestions)) result.push(...conflictSuggestions)
-  if (Array.isArray(optimizeSuggestions)) result.push(...optimizeSuggestions.map((item: any) => typeof item === 'string' ? item : item.suggestion || item.reason || '建议调整作息节点'))
-  if (Array.isArray(changes)) result.push(...changes)
-  if (!result.length && conflictCount.value) {
-    result.push('建议将晚间活动提前，睡前30分钟减少强刺激互动。')
-    result.push('若下午加餐较晚，可适当提前晚餐或缩短加餐量，避免影响入睡。')
-  }
-  return result
+  suggestions.value.forEach(item => {
+    if (item.reason) result.push(item.reason)
+  })
+  const summaryTips = easyResult.value?.summary?.summary_tips
+  if (Array.isArray(summaryTips)) result.push(...summaryTips.filter(Boolean))
+  result.push(...extractCoachLines(coachResult.value))
+  return Array.from(new Set(result)).slice(0, 8)
 })
 
-const conflictCards = computed(() => {
-  if (conflicts.value.length) {
-    return conflicts.value.map((item, index) => ({
-      id: item.id || index,
-      level: index === 0 ? 'high' : 'mid',
-      levelText: index === 0 ? '重点' : '提醒',
-      title: item.conflict_type || '作息节点重叠',
-      desc: item.overlap_start && item.overlap_end
-        ? `${item.overlap_start} - ${item.overlap_end} 存在重叠或节奏偏差`
-        : '系统检测到睡眠、喂养或安抚节点可能互相影响',
-    }))
-  }
-  if (conflictResult.value?.total_conflicts) {
-    return Array.from({ length: conflictResult.value.total_conflicts }).map((_, index) => ({
-      id: index,
-      level: index === 0 ? 'high' : 'mid',
-      levelText: index === 0 ? '重点' : '提醒',
-      title: index === 0 ? '睡前节奏偏晚' : '喂养与睡眠间隔需优化',
-      desc: index === 0 ? '建议将睡前活动提前，减少夜间入睡阻力。' : '建议保持喂养后至少30分钟缓冲，再进入睡眠节点。',
-    }))
-  }
-  return []
-})
+const conflictCards = computed(() => deviations.value.map((item: any, index) => ({
+  id: item.id || item.entry_id || index,
+  level: index === 0 ? 'high' : 'mid',
+  levelText: index === 0 ? '重点' : '提醒',
+  title: item.activity || item.type || item.deviation_type || '作息偏差',
+  desc: item.reason
+    || item.message
+    || [item.expected_time || item.expected, item.actual_time || item.actual].filter(Boolean).join(' → ')
+    || '实际行为与当前日程存在偏差',
+})))
 
-const compareRows = computed(() => [
-  { label: '睡前活动', before: '20:30后仍活跃', after: '20:00进入安静流程' },
-  { label: '晚间喂养', before: '临睡前集中', after: '睡前30分钟完成' },
-  { label: '午睡节奏', before: '波动较大', after: '固定午睡窗口' },
-])
+const compareRows = computed(() => {
+  if (!suggestions.value.length) {
+    return [{ label: '暂无调整', before: '继续积累行为数据', after: '数据充足后生成建议' }]
+  }
+  return suggestions.value.slice(0, 5).map(item => ({
+    label: item.activity || '日程节点',
+    before: item.old_time_range || '当前计划',
+    after: item.new_time_range || '建议计划',
+  }))
+})
 
 onShow(async () => {
   if (!babyStore.currentBaby) await babyStore.fetchBabyList()
-  await Promise.all([checkConflicts(), optimizeRoutine()])
+  await loadAnalysis()
 })
 
-async function checkConflicts() {
+function getAgeGroup() {
+  const month = babyStore.currentBaby?.current_age_months ?? 11
+  if (month <= 3) return '0-3个月'
+  if (month <= 6) return '4-6个月'
+  if (month <= 12) return '7-12个月'
+  if (month <= 24) return '1-2岁'
+  if (month <= 36) return '2-3岁'
+  return '3-4岁'
+}
+
+function extractCoachLines(value: any): string[] {
+  if (!value) return []
+  if (typeof value === 'string') return [value]
+  if (Array.isArray(value)) return value.flatMap(extractCoachLines)
+  const preferred = ['lines', 'tips', 'suggestions', 'coach_lines', 'message', 'summary']
+  return preferred.flatMap(key => extractCoachLines(value[key])).filter(Boolean)
+}
+
+async function loadAnalysis() {
   if (!babyStore.currentBaby) return
-  const [listRes, checkRes] = await Promise.all([
-    get(API.ROUTINE.CONFLICTS(babyStore.currentBaby.id), undefined, { showError: false }),
-    post(API.ROUTINE.CONFLICT_CHECK, { baby_id: babyStore.currentBaby.id, check_days: 7 }, { showError: false }),
+  const babyId = babyStore.currentBaby.id
+  const [easy, coach, habit] = await Promise.allSettled([
+    getGrowthEasy(babyId, { period: 'week' }),
+    getGrowthCoach(babyId),
+    getGrowthHabit(babyId, { period: 'week' }),
   ])
-  if (listRes.code === 0 && listRes.data) conflicts.value = Array.isArray(listRes.data) ? listRes.data : listRes.data.items || []
-  if (checkRes.code === 0) conflictResult.value = checkRes.data
+  easyResult.value = easy.status === 'fulfilled' ? easy.value : null
+  coachResult.value = coach.status === 'fulfilled' ? coach.value : null
+  habitResult.value = habit.status === 'fulfilled' ? habit.value : null
 }
 
 async function optimizeRoutine() {
-  if (!babyStore.currentBaby) return
-  const res = await post(API.ROUTINE.EASY_OPTIMIZE, { baby_id: babyStore.currentBaby.id, analysis_days: 7 }, { showError: false })
-  if (res.code === 0) optimizeResult.value = res.data
+  await loadAnalysis()
+  uni.showToast({ title: suggestionList.value.length ? '建议已更新' : '暂无新建议', icon: 'none' })
 }
 
 async function fixConflicts() {
-  if (!babyStore.currentBaby) return
+  if (!babyStore.currentBaby || !suggestions.value.length || fixing.value) return
   fixing.value = true
   try {
-    const res = await post(API.ROUTINE.CONFLICT_FIX, { baby_id: babyStore.currentBaby.id, fix_type: 'auto' }, { showError: false })
-    if (res.code === 0) {
-      uni.showToast({ title: '优化方案已应用', icon: 'success' })
-      checkConflicts()
-      optimizeRoutine()
-    } else {
-      uni.showToast({ title: '后端修复待接入，建议已保留', icon: 'none' })
-    }
+    const preview = await applyGrowthHabit(babyStore.currentBaby.id, ageGroup.value, true)
+    const applyCount = preview.suggestion_count ?? preview.suggestions?.length ?? preview.applied?.length ?? 0
+    const skippedCount = preview.skipped?.length || 0
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '应用优化方案',
+        content: `预计更新${applyCount}条日程，跳过${skippedCount}条。确认写入个人日程吗？`,
+        confirmText: '确认应用',
+        success: result => resolve(result.confirm),
+        fail: () => resolve(false),
+      })
+    })
+    if (!confirmed) return
+    const result = await applyGrowthHabit(babyStore.currentBaby.id, ageGroup.value, false)
+    uni.showToast({ title: `已更新${result.applied?.length || 0}条日程`, icon: 'success' })
+    await loadAnalysis()
   } finally {
     fixing.value = false
   }

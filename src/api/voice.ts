@@ -4,8 +4,7 @@
  * 路径参数：{clip_id}, {session_id}, {voice_id}
  */
 import { get, post, put, del } from './request'
-import { API } from './config'
-import { SPEECH_BASE_URL } from './config'
+import { API, BASE_URL, SPEECH_BASE_URL } from './config'
 
 // 音色信息（对齐后端 VoiceClipInfo）
 export interface VoiceClip {
