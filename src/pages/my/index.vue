@@ -144,7 +144,7 @@ const currentBabyHint = computed(() => {
 })
 
 onMounted(() => {
-  statusBarHeight.value = uni.getSystemInfoSync().statusBarHeight || 44
+  statusBarHeight.value = uni.getWindowInfo().statusBarHeight || 44
 })
 
 onShow(() => {

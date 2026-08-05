@@ -26,8 +26,7 @@ const videoUrl = ref('')
 const statusBarHeight = ref(44)
 
 onLoad((options) => {
-  const sysInfo = uni.getSystemInfoSync()
-  statusBarHeight.value = sysInfo.statusBarHeight || 44
+  statusBarHeight.value = uni.getWindowInfo().statusBarHeight || 44
 
   if (options?.url) {
     videoUrl.value = decodeURIComponent(options.url)

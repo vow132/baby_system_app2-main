@@ -289,8 +289,7 @@ const routineAdviceDesc = computed(() => {
 let refreshTimer: number | null = null
 
 onMounted(() => {
-  const sysInfo = uni.getSystemInfoSync()
-  statusBarHeight.value = sysInfo.statusBarHeight || 44
+  statusBarHeight.value = uni.getWindowInfo().statusBarHeight || 44
 })
 
 onShow(() => {

@@ -1,8 +1,79 @@
 # 项目更新日志
 
+## 2026-08-05 小程序控制台兼容与 8123 状态轮询修复
+
+> 本轮只修改小程序前端和项目文档，没有修改 8122、8123 后端代码或数据库。修复范围包括静态资源 500、重复 `wx:key`、微信 API 弃用警告，以及 8123 宝宝状态轮询的超时和 422 未授权请求。
+
+### 问题与修复
+
+- 修复 `/static/logo.png` 返回 500：将现有 Logo 复制到 UniApp 实际参与打包的 `src/static/logo.png`，生产包和开发包均能生成 `static/logo.png`。
+- 修复成长页重复 `wx:key="成长洞察"`：周摘要和记忆预览均改为“内容 + 索引”的稳定唯一键。
+- 将项目源码中的 7 处 `uni.getSystemInfoSync()` 替换为 `uni.getWindowInfo()`，覆盖首页、成长、传感器历史、监控、我的、引导页和视频播放页。
+- 修复应用每 10 秒调用 8123 `GET /api/v1/sensor/status/baby` 时，超时异常没有捕获而产生裸 `Error: timeout` 的问题。
+- 状态轮询增加请求互斥：上一轮未完成时跳过下一轮，避免弱网下请求堆积。
+- Token 不存在或过期时立即停止状态轮询，避免继续发送缺少 `Authorization` 的请求并反复得到 HTTP 422。
+- 应用启动时刷新用户信息增加异常捕获；刷新失败保留本地会话，不再产生未处理 Promise。
+
+### 接口核对结果
+
+- 报错接口属于 8123：`GET /api/v1/sensor/status/baby?device_sn=...`，不属于 8122 Growth 服务。
+- 远程 8123 OpenAPI 确认该接口要求 `device_sn` 查询参数及 `Authorization: Bearer <token>` 请求头。
+- 对远程接口执行无 Token 的只读请求，HTTP 422 响应明确为 `header.authorization Field required`；因此 `device_sn=12312576163` 本身不是错误原因。
+- 8122 测试后台、`/schedule/age-groups` 和 `/growth/reminders` 同期只读检查均返回 HTTP 200，本次问题与 8122 无关。
+
+### 本轮全部改动文件
+
+| 文件 | 更新内容 |
+|------|----------|
+| `src/App.vue` | 捕获8123状态轮询异常、阻止并发轮询、Token缺失时停止轮询、捕获用户信息刷新异常 |
+| `src/static/logo.png` | 新增到UniApp源码静态资源目录，修复编译后Logo缺失 |
+| `src/pages/growth/index.vue` | 修复两个列表的重复key，并替换弃用的系统信息API |
+| `src/pages/growth/sensor-history.vue` | 替换弃用的系统信息API |
+| `src/pages/index/index.vue` | 替换弃用的系统信息API |
+| `src/pages/monitor/index.vue` | 替换弃用的系统信息API |
+| `src/pages/my/index.vue` | 替换弃用的系统信息API |
+| `src/pages/onboarding/index.vue` | 替换弃用的系统信息API |
+| `src/pages/video/player.vue` | 替换弃用的系统信息API |
+| `更新日志.md` | 记录本轮问题、接口核对、修改文件和验证结果 |
+| `实习.md` | 补充本轮排查与修复工作记录 |
+
+### 验证结果
+
+- 项目 `src` 目录已无自有代码调用 `getSystemInfoSync`；若 `vendor.js` 仍出现同名警告，来源是 UniApp/uView 的兼容回退代码。
+- `npm run build:mp-weixin` 通过，产物位于 `dist/build/mp-weixin`。
+- `npm run dev:mp-weixin` 已生成最新 `dist/dev/mp-weixin`；该命令为持续监听模式，外部停止监听不代表首轮编译失败。
+- 开发产物已确认包含 Logo、唯一列表 key、`getWindowInfo`、状态轮询异常捕获和 Token 检查。
+- 构建仅保留项目依赖原有的 uView/Sass `@import` 弃用警告，不影响小程序产物。
+
+## 2026-08-05 喂养打卡接口接入与智能作息承接
+
+> 当前状态：基础喂养打卡已由旧的 `/feeding-records` CRUD 契约切换到 8122 新增的 `/mp/checkin` 事件流接口；智能作息中的喂养计划可以直接进入打卡并回写“已打卡”状态。正式发布仍需部署更新后的 8123 认证网关。
+
+### 新喂养打卡接口
+
+- 根据《Baby-EgoLife Growth API（增量：相对长记忆18接口）》接入 `GET /mp/checkin/types`、`POST /mp/checkin` 和 `POST /mp/checkin/undo`。
+- 前端不再调用返回 404 的 `/feeding-records`；喂养历史统一从 `GET /events` 中读取 `eat/feed/feeding` 实际事件。
+- 保留母乳、配方奶、混合喂养、辅食、奶量、喂养时长、哺乳侧、拍嗝和备注表单，并按新接口契约转换为 `type/date/time/note`。
+- 打卡成功后支持通过事件流查看记录；仅对 `mp-` 开头的小程序打卡事件显示“撤销打卡”，避免误撤销传感器事件。
+- 8123 本地认证网关增加 `/api/v1/egolife/mp/checkin/types`、`/mp/checkin` 和 `/mp/checkin/undo` 三条转发路由，继续由网关注入可信宝宝身份。
+
+### 与智能作息表的承接关系
+
+- 智能作息表的每条“喂养”日程新增“去打卡/HH:mm 已打卡”状态。
+- 从日程进入喂养页时自动携带计划 ID、活动名称、当天日期和计划开始时间，喂养页显示“承接智能作息”提示。
+- 提交事件的 `note` 中记录计划 ID 和计划名称；返回作息页后重新读取 `/events`，优先按计划 ID、其次按计划名称和两小时内最近时间匹配实际喂养事件。
+- 打卡成功后自动返回智能作息页；该 `eat` 事件继续作为 EASY、Habit 和成长报告的实际行为数据来源。
+
+### 接口限制与验证
+
+- 新增接口没有记录修改能力，因此当前支持新增、补记、查看和撤销，不提供直接编辑。
+- OpenAPI 请求 Schema 只明确了 `type/date/time/note`，尚无结构化 `schedule_id` 字段；当前将计划 ID 写入 `note` 实现关联，后端后续应补充正式字段。
+- `GET /mp/checkin/types` 已在 8122 实测 HTTP 200；为避免污染共享服务器，没有自动执行有效的 `POST /mp/checkin` 或撤销写操作，最终写入和回显需在小程序中人工确认。
+- `npx tsc --noEmit`、`npm run build:mp-weixin` 均通过，`dist/dev/mp-weixin` 已更新；构建仅有既有 uView/Sass 弃用警告。
+
 ## 2026-08-04 Baby-EgoLife 8122 接入、迁移审计与安全修复
 
-> 当前状态：小程序和 8123 认证代理代码已完成，8122 只读接口与 Habit dry-run 已实测；正式喂养记录接口尚未由 8122 提供，正式环境 HTTPS 域名和服务器部署仍待完成。
+> 本节记录 2026-08-04 的迁移状态；喂养能力已在 2026-08-05 改接 `/mp/checkin`，最新状态以上一节为准。
 
 ### 本轮补充：作息日程表单与时间选择
 
@@ -43,7 +114,7 @@
 - 成长页和报告页接入周报/月报；日报继续使用 8123 原报告，因为 8122 不支持 `period=day`。
 - AI 页面增加“宝宝数据问答”，与普通语音助手使用独立历史。
 - 消息中心将 Growth 作息提醒与 8123 设备告警、系统通知分组展示。
-- 新增喂养打卡页面和正式 CRUD 客户端契约；接口未发布时明确提示，不使用假数据或文本事件临时替代。
+- 喂养页面已在 2026-08-05 改接 `/mp/checkin` 事件流，旧 `/feeding-records` CRUD 契约不再由运行页面调用。
 - 开发环境使用测试 8122；生产构建强制走 8123 网关，并通过 `VITE_API_BASE_URL` 配置 HTTPS 域名。
 - 新增 `.env.example` 和 Vite 类型声明；修复 `voice.ts` 原有 `BASE_URL` 缺失导入。
 
@@ -55,7 +126,7 @@
 - Growth Meta、宝宝 Growth Profile、提醒、EASY、Coach、Habit 和 Habit Apply。
 - 行为事件查询、新增及 `PUT /events/{event_id}`。
 - 长期记忆、每日摘要、成长报告、宝宝问答和问答历史。
-- 正式喂养记录查询、新增、修改和删除契约。
+- 保留旧 `/feeding-records` 转发契约，同时新增并实际使用 `/mp/checkin/types`、`/mp/checkin`、`/mp/checkin/undo`。
 
 安全与可靠性修复：
 
@@ -86,10 +157,10 @@
 
 ### 已发现但需要 8122 后端处理的问题
 
-1. **正式喂养接口缺失**：`GET/POST/PUT/DELETE /feeding-records` 尚未发布，因此喂养记录目前不能真正保存。
+1. **结构化喂养 CRUD 仍缺失**：`/feeding-records` 仍为 404；基础打卡已改用 `/mp/checkin`，但记录编辑、独立分页和结构化字段仍需后端扩展。
 2. **日程脏数据**：测试库 `schedule id=118、119` 的 `time_range/activity/appTip/app_push` 为“1”。前端已过滤，后端仍应删除或修正，并增加写入校验。
 3. **报告周期契约不统一**：当前仅支持 `week/month`；如要提供行为日报，需要实现 `period=day`。Apifox 示例不能使用 `weekly/monthly`。
-4. **Apifox 文档需更新**：将写死事件路径改为 `PUT /events/{event_id}`，将错误的 `GET /schedule/82` 改为 `PUT /schedule/{id}`，并补齐 Growth、月龄和正式喂养接口。
+4. **Apifox 文档需更新**：将写死事件路径改为 `PUT /events/{event_id}`，将错误的 `GET /schedule/82` 改为 `PUT /schedule/{id}`，并补齐 Growth、月龄和 `/mp/checkin*` 接口的完整 Schema。
 5. **正式身份与权限**：8122 自身仍应对所有写接口做家庭权限和幂等校验，不能只依赖 8123 代理。
 6. **正式发布域名**：微信小程序不能以 HTTP IP 发布，必须部署 8123 HTTPS 网关并配置微信 request 合法域名。
 
@@ -108,7 +179,7 @@
 
 ### 部署与联调顺序
 
-1. 先由 8122 后端实现并发布正式 `/feeding-records`，清理日程脏记录并更新 Apifox。
+1. 先人工验证 `/mp/checkin` 新增、`/events` 回显和 `/mp/checkin/undo` 撤销；如需要直接编辑喂养记录，再由 8122 后端补充结构化 CRUD 或 `schedule_id` 字段。
 2. 发布 8123 新代理代码，配置 `LTM_API_URL` 和必要的 `EGOLIFE_CONTEXT_MAP_JSON`。
 3. 使用真实登录账号验证 `GET /api/v1/egolife/context?baby_id=...` 的三项身份映射。
 4. 在测试环境依次验证日程只读、个人计划写入、Habit dry-run/确认应用和宝宝切换。

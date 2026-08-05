@@ -314,7 +314,7 @@ const alerts = computed(() => {
 let refreshTimer: number | null = null
 
 onMounted(() => {
-  statusBarHeight.value = uni.getSystemInfoSync().statusBarHeight || 44
+  statusBarHeight.value = uni.getWindowInfo().statusBarHeight || 44
 })
 
 onShow(() => {

@@ -198,8 +198,7 @@ const temperatureAvg = computed(() => {
 })
 
 onMounted(() => {
-  const sysInfo = uni.getSystemInfoSync()
-  statusBarHeight.value = sysInfo.statusBarHeight || 44
+  statusBarHeight.value = uni.getWindowInfo().statusBarHeight || 44
   // 默认查今天
   setQuickRange('today')
 })

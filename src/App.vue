@@ -3,9 +3,11 @@ import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
 import { useUserStore } from './stores/user'
 import { getDeviceList } from './api/device'
 import { getBabyStatus } from './api/monitor'
+import { TOKEN_KEY } from './api/config'
 
 let statusTimer: ReturnType<typeof setInterval> | null = null
 let lastAlertLevel = -1
+let statusRequestPending = false
 
 async function startDangerPolling() {
   if (statusTimer) return
@@ -15,6 +17,15 @@ async function startDangerPolling() {
     const deviceSn = devices[0]?.device_sn
     if (!deviceSn) return
     statusTimer = setInterval(async () => {
+      const token = uni.getStorageSync(TOKEN_KEY)
+      if (!token) {
+        stopDangerPolling()
+        return
+      }
+      // Skip this cycle while the previous request is still pending.
+      if (statusRequestPending) return
+      statusRequestPending = true
+      try {
       const statusRes = await getBabyStatus(deviceSn)
       const level = statusRes?.data?.status_level ?? 0
       if (level === 3 && lastAlertLevel !== 3) {
@@ -35,12 +46,19 @@ async function startDangerPolling() {
         })
       }
       lastAlertLevel = level
+      } catch (error) {
+        // A background polling failure must not become an unhandled Promise.
+        console.warn('[danger-polling] /sensor/status/baby request failed; retrying later', error)
+      } finally {
+        statusRequestPending = false
+      }
     }, 10000)
   } catch (_) {}
 }
 
 function stopDangerPolling() {
   if (statusTimer) { clearInterval(statusTimer); statusTimer = null }
+  statusRequestPending = false
 }
 
 export default {
@@ -48,7 +66,9 @@ export default {
     console.log('App Launch')
     const userStore = useUserStore()
     if (userStore.isLoggedIn) {
-      userStore.fetchUserInfo()
+      userStore.fetchUserInfo().catch(error => {
+        console.warn('[app-launch] user info refresh failed; keeping cached session', error)
+      })
       startDangerPolling()
     }
   },

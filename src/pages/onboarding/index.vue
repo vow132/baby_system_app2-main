@@ -421,8 +421,7 @@ const currentStep = ref(0)
 const onboardingEntryMode = ref<'create' | 'join'>('create')
 
 onLoad(async (options: any) => {
-  const sysInfo = uni.getSystemInfoSync()
-  statusBarHeight.value = sysInfo.statusBarHeight || 44
+  statusBarHeight.value = uni.getWindowInfo().statusBarHeight || 44
   void loadPushTemplate()
 
   // 直接模式：从AI陪伴页面进入，跳到语音录入

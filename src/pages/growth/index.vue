@@ -79,7 +79,7 @@
             <text class="score-label">EASY覆盖率</text>
           </view>
           <view class="summary-list">
-            <view v-for="item in weeklySummary" :key="item.title" class="summary-row">
+            <view v-for="(item, index) in weeklySummary" :key="`${item.title}-${index}`" class="summary-row">
               <text class="summary-row-title">{{ item.title }}</text>
               <text class="summary-row-desc">{{ item.desc }}</text>
             </view>
@@ -110,7 +110,7 @@
             <u-icon name="clock-fill" size="22" color="#667eea" />
           </view>
           <view class="timeline-preview">
-            <view class="timeline-row" v-for="item in memoryPreview" :key="item">
+            <view class="timeline-row" v-for="(item, index) in memoryPreview" :key="`${item}-${index}`">
               <view class="timeline-dot" />
               <text>{{ item }}</text>
             </view>
@@ -201,8 +201,7 @@ const stageText = computed(() => {
 })
 
 onMounted(() => {
-  const sysInfo = uni.getSystemInfoSync()
-  statusBarHeight.value = sysInfo.statusBarHeight || 44
+  statusBarHeight.value = uni.getWindowInfo().statusBarHeight || 44
 })
 
 onShow(async () => {
