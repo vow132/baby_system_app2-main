@@ -124,20 +124,27 @@ export interface GrowthReport {
   [key: string]: any
 }
 
-export interface FeedingRecord {
-  id: string | number
-  occurred_at: string
-  feeding_type: 'breast' | 'formula' | 'mixed' | 'solid'
-  amount_ml?: number | null
-  duration_minutes?: number | null
-  breast_side?: 'left' | 'right' | 'both' | null
-  burped?: boolean
-  food_name?: string | null
-  note?: string | null
-  created_at?: string | null
+export interface MpCheckinType {
+  id: string
+  label: string
+  event_type: string
+  primary?: boolean
+  supports_backfill?: boolean
+  backfill_hint?: string
 }
 
-export type FeedingRecordInput = Omit<FeedingRecord, 'id' | 'created_at'>
+export interface MpCheckinInput {
+  type: string
+  date: string
+  time: string
+  note?: string
+}
+
+export interface MpCheckinResult {
+  event_id?: string
+  event?: EgoLifeEvent
+  [key: string]: any
+}
 
 export interface EgoLifeEvent {
   event_id?: string
@@ -367,24 +374,22 @@ export function getBabyQaHistory(babyId: number, params: Record<string, any> = {
   })
 }
 
-export function getFeedingRecords(babyId: number, params: Record<string, any> = {}) {
-  return egoLifeRequest<{ items?: FeedingRecord[]; total?: number } | FeedingRecord[]>(
-    '/feeding-records',
+export async function getMpCheckinTypes(babyId: number): Promise<MpCheckinType[]> {
+  const data = await egoLifeRequest<{ items?: MpCheckinType[] } | MpCheckinType[]>(
+    '/mp/checkin/types',
     babyId,
-    { params, showError: false },
+    { showError: false },
   )
+  return Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : []
 }
 
-export function createFeedingRecord(babyId: number, data: FeedingRecordInput) {
-  return egoLifeRequest<FeedingRecord>('/feeding-records', babyId, { method: 'POST', data })
+export function createMpCheckin(babyId: number, data: MpCheckinInput) {
+  return egoLifeRequest<MpCheckinResult>('/mp/checkin', babyId, { method: 'POST', data })
 }
 
-export function updateFeedingRecord(babyId: number, id: string | number, data: Partial<FeedingRecordInput>) {
-  return egoLifeRequest<FeedingRecord>(`/feeding-records/${id}`, babyId, { method: 'PUT', data })
-}
-
-export function deleteFeedingRecord(babyId: number, id: string | number) {
-  return egoLifeRequest<{ deleted?: string | number }>(`/feeding-records/${id}`, babyId, {
-    method: 'DELETE',
+export function undoMpCheckin(babyId: number, eventId: string) {
+  return egoLifeRequest<Record<string, any>>('/mp/checkin/undo', babyId, {
+    method: 'POST',
+    data: { event_id: eventId },
   })
 }

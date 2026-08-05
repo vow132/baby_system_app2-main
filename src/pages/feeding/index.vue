@@ -3,13 +3,17 @@
     <view class="hero">
       <view>
         <text class="hero-title">喂养打卡</text>
-        <text class="hero-desc">{{ babyName }} · 记录母乳、配方奶和辅食</text>
+        <text class="hero-desc">{{ babyName }} · 支持实时打卡和补记</text>
       </view>
       <view class="hero-count">{{ records.length }}条</view>
     </view>
 
+    <view v-if="plannedActivity" class="plan-link-card">
+      <text class="plan-link-title">承接智能作息：{{ plannedActivity }}</text>
+      <text class="plan-link-desc">{{ form.date }} {{ form.time }} · 完成后返回作息表并标记已打卡</text>
+    </view>
     <view class="form-card">
-      <view class="form-title">{{ editingId ? '修改喂养记录' : '新增喂养记录' }}</view>
+      <view class="form-title">新增喂养记录</view>
 
       <view class="field">
         <text class="label">喂养类型</text>
@@ -73,10 +77,7 @@
       </view>
 
       <view class="form-actions">
-        <button v-if="editingId" class="cancel-btn" @click="resetForm">取消修改</button>
-        <button class="submit-btn" :loading="saving" @click="submitRecord">
-          {{ editingId ? '保存修改' : '完成打卡' }}
-        </button>
+        <button class="submit-btn" :loading="saving" @click="submitRecord">完成打卡</button>
       </view>
     </view>
 
@@ -87,25 +88,23 @@
       </view>
 
       <view v-if="records.length" class="record-list">
-        <view v-for="item in records" :key="item.id" class="record-item">
+        <view v-for="item in records" :key="item.event_id || item.id" class="record-item">
           <view class="record-time">
-            <text>{{ formatRecordTime(item.occurred_at) }}</text>
-            <text class="type-tag">{{ feedingTypeText(item.feeding_type) }}</text>
+            <text>{{ formatRecordTime(item) }}</text>
+            <text class="type-tag">喂养</text>
           </view>
           <view class="record-main">
             <text class="record-title">{{ recordSummary(item) }}</text>
-            <text v-if="item.note" class="record-note">{{ item.note }}</text>
           </view>
-          <view class="record-actions">
-            <text @click="editRecord(item)">编辑</text>
-            <text class="danger" @click="confirmDelete(item)">删除</text>
+          <view v-if="canUndo(item)" class="record-actions">
+            <text class="danger" @click="confirmUndo(item)">撤销打卡</text>
           </view>
         </view>
       </view>
 
       <view v-else class="empty">
         <u-icon name="heart-fill" size="38" color="#fbbf24" />
-        <text>{{ endpointReady ? '还没有喂养记录' : '喂养接口尚未开放，请联系后端发布 /feeding-records' }}</text>
+        <text>{{ endpointReady ? '还没有喂养打卡记录' : '喂养打卡接口暂时不可用' }}</text>
       </view>
     </view>
   </view>
@@ -113,25 +112,27 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import {
-  createFeedingRecord,
-  deleteFeedingRecord,
-  getFeedingRecords,
-  updateFeedingRecord,
-  type FeedingRecord,
-  type FeedingRecordInput,
+  createMpCheckin,
+  getEgoEvents,
+  getMpCheckinTypes,
+  undoMpCheckin,
+  type EgoLifeEvent,
+  type MpCheckinInput,
 } from '@/api/egolife'
 import { useBabyStore } from '@/stores'
 
-type FeedingType = FeedingRecordInput['feeding_type']
-type BreastSide = FeedingRecordInput['breast_side']
+type FeedingType = 'breast' | 'formula' | 'mixed' | 'solid'
+type BreastSide = 'left' | 'right' | 'both'
 
 const babyStore = useBabyStore()
-const records = ref<FeedingRecord[]>([])
-const editingId = ref<string | number | null>(null)
+const records = ref<EgoLifeEvent[]>([])
 const saving = ref(false)
 const endpointReady = ref(true)
+const fromRoutine = ref(false)
+const plannedActivity = ref('')
+const plannedScheduleId = ref('')
 
 const feedingTypes: Array<{ label: string; value: FeedingType }> = [
   { label: '母乳', value: 'breast' },
@@ -158,9 +159,28 @@ const form = reactive({
 const babyName = computed(() => babyStore.currentBaby?.name || '小宝贝')
 const breastSideIndex = computed(() => Math.max(0, breastSides.indexOf(form.breast_side)))
 
+function decodeRouteParam(value: unknown) {
+  try {
+    return decodeURIComponent(String(value || ''))
+  } catch {
+    return String(value || '')
+  }
+}
+
+onLoad((options = {}) => {
+  fromRoutine.value = options.from === 'routine'
+  plannedActivity.value = decodeRouteParam(options.activity)
+  plannedScheduleId.value = decodeRouteParam(options.schedule_id)
+  const plannedDate = decodeRouteParam(options.date)
+  const plannedTime = decodeRouteParam(options.time)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(plannedDate)) form.date = plannedDate
+  if (/^\d{2}:\d{2}$/.test(plannedTime)) form.time = plannedTime
+})
+
 onShow(async () => {
   if (!babyStore.currentBaby) await babyStore.fetchBabyList()
-  await loadRecords()
+  if (!babyStore.currentBaby) return
+  await Promise.all([loadCheckinSupport(), loadRecords()])
 })
 
 function formatDate(date: Date) {
@@ -175,25 +195,44 @@ function changeBreastSide(event: any) {
   form.breast_side = breastSides[Number(event.detail.value)] || 'both'
 }
 
-async function loadRecords() {
+async function loadCheckinSupport() {
   if (!babyStore.currentBaby) return
   try {
-    const data = await getFeedingRecords(babyStore.currentBaby.id, { page: 1, page_size: 30 })
-    records.value = (Array.isArray(data) ? data : data?.items || [])
-      .slice()
-      .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())
-    endpointReady.value = true
+    const types = await getMpCheckinTypes(babyStore.currentBaby.id)
+    endpointReady.value = types.some(item => item.id === 'feed')
   } catch {
-    records.value = []
     endpointReady.value = false
   }
 }
 
-function buildPayload(): FeedingRecordInput | null {
+async function loadRecords() {
+  if (!babyStore.currentBaby) return
+  try {
+    const data = await getEgoEvents(babyStore.currentBaby.id, { page: 1, page_size: 100 })
+    const items = data?.events || data?.items || []
+    records.value = items
+      .filter(isFeedingEvent)
+      .slice()
+      .sort((a, b) => eventTimestamp(b) - eventTimestamp(a))
+  } catch {
+    records.value = []
+  }
+}
+
+function isFeedingEvent(item: EgoLifeEvent) {
+  const type = String(item.event_type || item.type || '').toLowerCase()
+  return type === 'eat' || type === 'feed' || type === 'feeding'
+}
+
+function buildPayload(): MpCheckinInput | null {
   const amount = form.amount_ml ? Number(form.amount_ml) : null
   const duration = form.duration_minutes ? Number(form.duration_minutes) : null
   if (['formula', 'mixed'].includes(form.feeding_type) && (!amount || amount <= 0)) {
     uni.showToast({ title: '请填写正确的奶量', icon: 'none' })
+    return null
+  }
+  if (duration !== null && duration <= 0) {
+    uni.showToast({ title: '请填写正确的喂养时长', icon: 'none' })
     return null
   }
   if (form.feeding_type === 'solid' && !form.food_name.trim()) {
@@ -205,15 +244,26 @@ function buildPayload(): FeedingRecordInput | null {
     uni.showToast({ title: '请选择正确的喂养时间', icon: 'none' })
     return null
   }
+
+  const details: string[] = []
+  if (plannedScheduleId.value) details.push(`计划ID=${plannedScheduleId.value}`)
+  if (plannedActivity.value) details.push(`计划：${plannedActivity.value}`)
+  if (form.feeding_type === 'formula') details.push(`配方奶${amount}ml`)
+  if (form.feeding_type === 'breast') details.push('母乳')
+  if (form.feeding_type === 'mixed') details.push(`混合喂养${amount}ml`)
+  if (form.feeding_type === 'solid') details.push(`辅食：${form.food_name.trim()}`)
+  if (duration) details.push(`${duration}分钟`)
+  if (['breast', 'mixed'].includes(form.feeding_type)) {
+    details.push(breastSideLabels[breastSideIndex.value])
+  }
+  details.push(form.burped ? '已拍嗝' : '未拍嗝')
+  if (form.note.trim()) details.push(form.note.trim())
+
   return {
-    occurred_at: occurredAt.toISOString(),
-    feeding_type: form.feeding_type,
-    amount_ml: amount,
-    duration_minutes: duration,
-    breast_side: ['breast', 'mixed'].includes(form.feeding_type) ? form.breast_side : null,
-    burped: form.burped,
-    food_name: form.feeding_type === 'solid' ? form.food_name.trim() : null,
-    note: form.note.trim() || null,
+    type: 'feed',
+    date: form.date,
+    time: form.time,
+    note: details.join('；'),
   }
 }
 
@@ -223,54 +273,46 @@ async function submitRecord() {
   if (!payload) return
   saving.value = true
   try {
-    if (editingId.value) {
-      await updateFeedingRecord(babyStore.currentBaby.id, editingId.value, payload)
-    } else {
-      await createFeedingRecord(babyStore.currentBaby.id, payload)
-    }
-    uni.showToast({ title: editingId.value ? '记录已更新' : '打卡成功', icon: 'success' })
+    await createMpCheckin(babyStore.currentBaby.id, payload)
+    endpointReady.value = true
+    uni.showToast({ title: '打卡成功', icon: 'success' })
     resetForm()
     await loadRecords()
+    if (fromRoutine.value) {
+      setTimeout(() => uni.navigateBack(), 600)
+    }
   } catch (error: any) {
-    uni.showToast({ title: error?.message || '喂养接口尚未开放', icon: 'none' })
+    uni.showToast({ title: error?.message || '喂养打卡失败', icon: 'none' })
   } finally {
     saving.value = false
   }
 }
 
-function editRecord(item: FeedingRecord) {
-  editingId.value = item.id
-  const date = new Date(item.occurred_at)
-  form.feeding_type = item.feeding_type
-  form.date = formatDate(date)
-  form.time = formatClock(date)
-  form.amount_ml = item.amount_ml == null ? '' : String(item.amount_ml)
-  form.duration_minutes = item.duration_minutes == null ? '' : String(item.duration_minutes)
-  form.breast_side = item.breast_side || 'both'
-  form.burped = !!item.burped
-  form.food_name = item.food_name || ''
-  form.note = item.note || ''
-  uni.pageScrollTo({ scrollTop: 0, duration: 200 })
+function canUndo(item: EgoLifeEvent) {
+  return String(item.event_id || '').startsWith('mp-')
 }
 
-function confirmDelete(item: FeedingRecord) {
-  if (!babyStore.currentBaby) return
+function confirmUndo(item: EgoLifeEvent) {
+  if (!babyStore.currentBaby || !item.event_id) return
   uni.showModal({
-    title: '删除喂养记录',
-    content: '删除后将同步更新相关行为事件，是否继续？',
+    title: '撤销喂养打卡',
+    content: '撤销后该条记录将从事件流中移除，是否继续？',
     confirmColor: '#ef4444',
     success: async result => {
       if (!result.confirm) return
-      await deleteFeedingRecord(babyStore.currentBaby!.id, item.id)
-      uni.showToast({ title: '已删除', icon: 'success' })
-      await loadRecords()
+      try {
+        await undoMpCheckin(babyStore.currentBaby!.id, item.event_id!)
+        uni.showToast({ title: '已撤销', icon: 'success' })
+        await loadRecords()
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '撤销失败', icon: 'none' })
+      }
     },
   })
 }
 
 function resetForm() {
   const current = new Date()
-  editingId.value = null
   form.feeding_type = 'formula'
   form.date = formatDate(current)
   form.time = formatClock(current)
@@ -282,24 +324,30 @@ function resetForm() {
   form.note = ''
 }
 
-function feedingTypeText(type: FeedingType) {
-  return feedingTypes.find(item => item.value === type)?.label || type
+function eventTimestamp(item: EgoLifeEvent) {
+  const value = item.timestamp || item.occurred_at
+  const time = value ? new Date(value).getTime() : 0
+  return Number.isNaN(time) ? 0 : time
 }
 
-function formatRecordTime(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+function formatRecordTime(item: EgoLifeEvent) {
+  const value = item.timestamp || item.occurred_at
+  if (value) {
+    const date = new Date(value)
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    }
+  }
+  const clock = String(item.start_time || '').replace(/^(\d{2})(\d{2}).*$/, '$1:$2')
+  return [item.date, clock].filter(Boolean).join(' ') || '时间未知'
 }
 
-function recordSummary(item: FeedingRecord) {
-  if (item.feeding_type === 'solid') return item.food_name || '辅食'
-  const parts = [
-    item.amount_ml ? `${item.amount_ml}ml` : '',
-    item.duration_minutes ? `${item.duration_minutes}分钟` : '',
-    item.burped ? '已拍嗝' : '',
-  ].filter(Boolean)
-  return parts.join(' · ') || feedingTypeText(item.feeding_type)
+function recordSummary(item: EgoLifeEvent) {
+  if (typeof item.note === 'string' && item.note) return item.note
+  if (typeof item.raw_text === 'string' && item.raw_text) return item.raw_text
+  if (typeof item.text === 'string' && item.text) return item.text
+  if (Array.isArray(item.evidence) && item.evidence.length) return item.evidence.join('；')
+  return '喂养打卡'
 }
 </script>
 
@@ -326,6 +374,16 @@ function recordSummary(item: FeedingRecord) {
 .submit-btn, .cancel-btn { flex: 1; border: none; border-radius: 16rpx; font-size: 27rpx; }
 .submit-btn { background: linear-gradient(135deg, #f59e0b, #f97316); color: #fff; }
 .cancel-btn { background: #f5f5f4; color: #78716c; }
+.plan-link-card {
+  padding: 22rpx 26rpx;
+  margin-bottom: 22rpx;
+  border: 2rpx solid #fed7aa;
+  border-radius: 20rpx;
+  background: #fff7ed;
+}
+.plan-link-title { display: block; color: #c2410c; font-size: 27rpx; font-weight: 800; }
+.plan-link-desc { display: block; margin-top: 8rpx; color: #9a6b4f; font-size: 23rpx; line-height: 1.45; }
+
 .history-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18rpx; }
 .refresh { color: #ea580c; font-size: 24rpx; }
 .record-list { display: flex; flex-direction: column; gap: 14rpx; }

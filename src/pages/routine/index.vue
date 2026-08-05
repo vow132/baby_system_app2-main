@@ -11,10 +11,10 @@
       <view class="hero-tag">EASY作息</view>
     </view>
 
-    <view class="feeding-entry" @click="goFeeding">
+    <view class="feeding-entry" @click="goFeeding()">
       <view>
         <text class="feeding-entry-title">喂养打卡</text>
-        <text class="feeding-entry-desc">记录奶量、时长、辅食和拍嗝情况</text>
+        <text class="feeding-entry-desc">今日已记录 {{ todayFeedingCount }} 次 · 打卡后同步智能作息分析</text>
       </view>
       <u-icon name="arrow-right" size="18" color="#f97316" />
     </view>
@@ -84,6 +84,12 @@
               <text>{{ item.reminder }}</text>
             </view>
             <view class="schedule-actions">
+              <text
+                v-if="item.type === 'eat'"
+                class="checkin-action"
+                :class="{ done: isFeedingChecked(item) }"
+                @click.stop="handleFeedingSchedule(item)"
+              >{{ feedingCheckinText(item) }}</text>
               <text @click.stop="openEditSchedule(item)">{{ item.personal ? '编辑' : '复制并编辑' }}</text>
               <text v-if="item.personal" class="danger" @click.stop="removeScheduleItem(item)">删除</text>
             </view>
@@ -218,10 +224,12 @@ import { useBabyStore } from '@/stores'
 import {
   createEgoSchedule,
   deleteEgoSchedule,
+  getEgoEvents,
   getEgoSchedule,
   getGrowthReminders,
   getScheduleAgeGroups,
   updateEgoSchedule,
+  type EgoLifeEvent,
   type GrowthReminder,
   type ScheduleEntry,
 } from '@/api/egolife'
@@ -257,6 +265,7 @@ const backendSchedule = ref<ScheduleItem[]>([])
 const globalScheduleEntries = ref<ScheduleEntry[]>([])
 const personalScheduleEntries = ref<ScheduleEntry[]>([])
 const reminderItems = ref<GrowthReminder[]>([])
+const feedingEvents = ref<EgoLifeEvent[]>([])
 const availableAgeGroups = ref<string[]>([])
 const generating = ref(false)
 const savingSchedule = ref(false)
@@ -406,12 +415,52 @@ const nextReminders = computed(() => reminderItems.value.slice(0, 4).map(item =>
   item.reminder || item.app_push || item.message || '节点提醒',
 )))
 
+const todayFeedingEvents = computed(() => {
+  const today = localDateKey(new Date())
+  return feedingEvents.value.filter(item => getEventDateKey(item) === today)
+})
+const todayFeedingCount = computed(() => todayFeedingEvents.value.length)
+const feedingCheckinMatches = computed(() => {
+  const matches = new Map<string, EgoLifeEvent>()
+  const schedules = displaySchedule.value.filter(item => item.type === 'eat')
+  const usedSchedules = new Set<string>()
+  const events = todayFeedingEvents.value.slice().sort((a, b) => getEventMinutes(a) - getEventMinutes(b))
+
+  for (const event of events) {
+    const eventMinutes = getEventMinutes(event)
+    if (eventMinutes < 0) continue
+    const text = getEventText(event)
+    let bestItem: ScheduleItem | undefined
+    let bestScore = Number.POSITIVE_INFINITY
+    for (const item of schedules) {
+      const key = getScheduleKey(item)
+      if (usedSchedules.has(key)) continue
+      const startMinutes = getScheduleStartMinutes(item)
+      if (startMinutes < 0) continue
+      const exactScheduleId = !!item.id && text.includes(`计划ID=${item.id}`)
+      const exactPlan = exactScheduleId || (!!item.activity && text.includes(item.activity))
+      const distance = Math.abs(eventMinutes - startMinutes)
+      if (!exactPlan && distance > 120) continue
+      const score = exactPlan ? -1000 + distance : distance
+      if (score < bestScore) {
+        bestItem = item
+        bestScore = score
+      }
+    }
+    if (bestItem) {
+      const key = getScheduleKey(bestItem)
+      usedSchedules.add(key)
+      matches.set(key, event)
+    }
+  }
+  return matches
+})
 onShow(async () => {
   if (!babyStore.currentBaby) await babyStore.fetchBabyList()
   selectedAge.value = getBabyAgeMonth()
   selectedTemplateKey.value = getTemplateKeyByAge(selectedAge.value)
   generatedSchedule.value = []
-  await Promise.all([loadAgeGroups(), loadTodayRoutine(), loadGrowthReminderList()])
+  await Promise.all([loadAgeGroups(), loadTodayRoutine(), loadGrowthReminderList(), loadFeedingEvents()])
 })
 
 function row(time: string, activity: string, type: ScheduleItem['type'], appTip: string, reminder: string): ScheduleItem {
@@ -520,6 +569,86 @@ async function loadGrowthReminderList() {
   }
 }
 
+async function loadFeedingEvents() {
+  if (!babyStore.currentBaby) return
+  try {
+    const data = await getEgoEvents(babyStore.currentBaby.id, { page: 1, page_size: 100 })
+    const items = data?.events || data?.items || []
+    feedingEvents.value = items.filter(isFeedingEvent)
+  } catch {
+    feedingEvents.value = []
+  }
+}
+
+function isFeedingEvent(item: EgoLifeEvent) {
+  const type = String(item.event_type || item.type || '').toLowerCase()
+  return type === 'eat' || type === 'feed' || type === 'feeding'
+}
+
+function localDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function getEventDate(item: EgoLifeEvent): Date | null {
+  const timestamp = item.timestamp || item.occurred_at
+  if (timestamp) {
+    const parsed = new Date(timestamp)
+    if (!Number.isNaN(parsed.getTime())) return parsed
+  }
+  const rawDate = String(item.date || '')
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    const parsed = new Date(`${rawDate}T00:00:00`)
+    if (!Number.isNaN(parsed.getTime())) return parsed
+  }
+  const dayMatch = `${rawDate} ${item.event_id || ''}`.match(/DAY(\d{1,3})/i)
+  if (dayMatch) {
+    const parsed = new Date(new Date().getFullYear(), 0, Number(dayMatch[1]))
+    if (!Number.isNaN(parsed.getTime())) return parsed
+  }
+  return null
+}
+
+function getEventDateKey(item: EgoLifeEvent) {
+  const date = getEventDate(item)
+  return date ? localDateKey(date) : ''
+}
+
+function getEventMinutes(item: EgoLifeEvent) {
+  const date = getEventDate(item)
+  if (date && (item.timestamp || item.occurred_at)) return date.getHours() * 60 + date.getMinutes()
+  const raw = String(item.start_time || item.event_id || '')
+  const match = raw.match(/(?:^|-)(\d{2})(\d{2})(?:\d{2})?(?:-|$)/) || raw.match(/^(\d{2})(\d{2})/)
+  return match ? Number(match[1]) * 60 + Number(match[2]) : -1
+}
+
+function getScheduleStartMinutes(item: ScheduleItem) {
+  const value = normalizeStartTime(item.time)
+  return value ? clockToMinutes(value) : -1
+}
+
+function getEventText(item: EgoLifeEvent) {
+  const evidence = Array.isArray(item.evidence) ? item.evidence.join('；') : ''
+  return [item.note, item.raw_text, item.text, evidence].filter(Boolean).join('；')
+}
+
+function getScheduleKey(item: ScheduleItem) {
+  return `${item.personal ? 'personal' : 'global'}-${item.id || item.time}-${item.activity}`
+}
+
+function isFeedingChecked(item: ScheduleItem) {
+  return feedingCheckinMatches.value.has(getScheduleKey(item))
+}
+
+function feedingCheckinText(item: ScheduleItem) {
+  const event = feedingCheckinMatches.value.get(getScheduleKey(item))
+  return event ? `${formatEventClock(event)} 已打卡` : '去打卡'
+}
+
+function formatEventClock(item: EgoLifeEvent) {
+  const minutes = getEventMinutes(item)
+  if (minutes < 0) return '今日'
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+}
 async function generateEasyPlan() {
   if (!babyStore.currentBaby) {
     uni.showToast({ title: '请先添加宝宝', icon: 'none' })
@@ -802,8 +931,23 @@ function removeScheduleItem(item: ScheduleItem) {
   })
 }
 
-function goFeeding() {
-  uni.navigateTo({ url: '/pages/feeding/index' })
+function handleFeedingSchedule(item: ScheduleItem) {
+  if (isFeedingChecked(item)) {
+    uni.showToast({ title: `${feedingCheckinText(item)}，无需重复记录`, icon: 'none' })
+    return
+  }
+  goFeeding(item)
+}
+
+function goFeeding(item?: ScheduleItem) {
+  const params = [`from=routine`, `date=${encodeURIComponent(localDateKey(new Date()))}`]
+  if (item) {
+    const time = normalizeStartTime(item.time)
+    if (time) params.push(`time=${encodeURIComponent(time)}`)
+    params.push(`activity=${encodeURIComponent(item.activity)}`)
+    if (item.id) params.push(`schedule_id=${encodeURIComponent(String(item.id))}`)
+  }
+  uni.navigateTo({ url: `/pages/feeding/index?${params.join('&')}` })
 }
 
 function normalizeStartTime(time: string) {
@@ -1196,6 +1340,19 @@ function getTypeIcon(type: ScheduleItem['type']) {
 
 .schedule-actions .danger {
   color: #ef4444;
+}
+
+.schedule-actions .checkin-action {
+  margin-right: auto;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  color: #fff;
+  background: #f97316;
+}
+
+.schedule-actions .checkin-action.done {
+  color: #15803d;
+  background: #dcfce7;
 }
 
 .schedule-form-mask {
