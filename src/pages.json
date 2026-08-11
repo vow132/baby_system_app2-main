@@ -200,6 +200,13 @@
       }
     },
     {
+      "path": "pages/moment/share",
+      "style": {
+        "navigationBarTitleText": "温馨照片",
+        "enableShareAppMessage": true
+      }
+    },
+    {
       "path": "pages/video/index",
       "style": {
         "navigationBarTitleText": "视频回放"

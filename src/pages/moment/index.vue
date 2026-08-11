@@ -43,7 +43,7 @@
           <view class="moment-media">
             <image
               v-if="item.kind === 'moment' && isPhoto(item.data)"
-              :src="resolveMediaUrl(item.data.thumbnail_url || item.data.media_url, '')"
+              :src="getMomentImageUrl(item.data)"
               mode="aspectFill"
               class="moment-image"
             />
@@ -57,8 +57,25 @@
             <text class="moment-caption">{{ item.kind === 'moment' ? getCaption(item.data) : (item.data.video_content_text || 'AI识别中...') }}</text>
           </view>
           <view class="moment-actions">
-            <u-icon v-if="item.kind === 'moment'" name="share" size="18" color="#e91e63" @click.stop="shareMoment(item.data)" />
-            <u-icon v-if="item.kind === 'moment'" name="download" size="18" color="#10b981" @click.stop="downloadMoment(item.data)" />
+            <button
+              v-if="item.kind === 'moment'"
+              class="icon-action-button"
+              open-type="share"
+              :data-moment-id="item.data.id"
+              aria-label="分享照片"
+              @click.stop
+            >
+              <u-icon name="share" size="18" color="#e91e63" />
+            </button>
+            <button
+              v-if="item.kind === 'moment'"
+              class="icon-action-button"
+              :disabled="downloadingMomentId === item.data.id"
+              aria-label="下载照片"
+              @click.stop="downloadMoment(item.data)"
+            >
+              <u-icon name="download" size="18" color="#10b981" />
+            </button>
           </view>
         </view>
       </view>
@@ -68,7 +85,7 @@
       <view class="grid-item" v-for="item in moments" :key="'m-' + item.id" @click="openDetail(item)">
         <image
           v-if="isPhoto(item)"
-          :src="resolveMediaUrl(item.thumbnail_url || item.media_url, '')"
+          :src="getMomentImageUrl(item)"
           mode="aspectFill"
           class="grid-image"
         />
@@ -108,7 +125,7 @@
           />
           <image
             v-else-if="selectedMoment && isPhoto(selectedMoment)"
-            :src="resolveMediaUrl(selectedMoment.media_url, '')"
+            :src="getMomentImageUrl(selectedMoment)"
             mode="aspectFill"
             class="detail-image"
           />
@@ -122,8 +139,16 @@
           <text class="detail-time">{{ formatDateTime(selectedMoment.captured_at || selectedMoment.created_at) }}</text>
           <text class="detail-caption">{{ getCaption(selectedMoment) }}</text>
           <view class="detail-actions">
-            <text @click="shareMoment(selectedMoment)">分享</text>
-            <text @click="downloadMoment(selectedMoment)">下载</text>
+            <button
+              class="detail-action-button"
+              open-type="share"
+              :data-moment-id="selectedMoment.id"
+            >分享</button>
+            <button
+              class="detail-action-button"
+              :disabled="downloadingMomentId === selectedMoment.id"
+              @click="downloadMoment(selectedMoment)"
+            >{{ downloadingMomentId === selectedMoment.id ? '保存中' : '下载' }}</button>
             <text @click="closeDetail">关闭</text>
           </view>
         </view>
@@ -139,12 +164,11 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShareAppMessage, onShow } from '@dcloudio/uni-app'
 import { useBabyStore } from '@/stores'
 import {
   getMomentTimeline,
   getMomentByMonth,
-  shareMoment as shareMomentApi,
   downloadMoment as downloadMomentApi,
   type MomentInfo,
 } from '@/api/moment'
@@ -154,7 +178,12 @@ import {
   type MomentVideoItem,
 } from '@/api/video'
 import { getDeviceList, type DeviceInfo } from '@/api/device'
-import { resolveMediaUrl } from '@/common/media'
+import {
+  cacheRemoteImageToLocalFile,
+  isHttpMediaAllowedForTesting,
+  resolveMediaUrl,
+  resolveRemoteMediaUrl,
+} from '@/common/media'
 
 const babyStore = useBabyStore()
 
@@ -168,6 +197,8 @@ const hasMore = ref(false)
 const loadingMore = ref(false)
 const selectedMoment = ref<MomentInfo | null>(null)
 const playingVideoUrl = ref('')
+const downloadingMomentId = ref<number | null>(null)
+const localMomentImageUrls = ref<Record<number, string>>({})
 
 const now = new Date()
 currentMonth.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -196,9 +227,39 @@ const groupedMoments = computed(() => {
 })
 
 onShow(async () => {
+  // #ifdef MP-WEIXIN
+  uni.hideShareMenu({
+    menus: ['shareAppMessage', 'shareTimeline'],
+    // 兼容当前 uni-app 的合并类型声明；微信端实际读取 menus。
+    hideShareItems: [],
+  })
+  // #endif
   if (!babyStore.currentBaby) await babyStore.fetchBabyList()
   await loadMoments()
 })
+
+// 微信原生分享回调必须同步返回，因此分享路径由时间线接口预先签发。
+// #ifdef MP-WEIXIN
+onShareAppMessage((options: any) => {
+  const momentId = Number(options?.target?.dataset?.momentId)
+  const item = moments.value.find(moment => moment.id === momentId)
+    || (selectedMoment.value?.id === momentId ? selectedMoment.value : null)
+
+  if (!item?.share_path) {
+    return {
+      title: '温馨时刻',
+      path: '/pages/moment/index',
+    }
+  }
+
+  const imageUrl = getMomentImageUrl(item)
+  return {
+    title: getMomentTitle(item),
+    path: item.share_path,
+    ...(imageUrl ? { imageUrl } : {}),
+  }
+})
+// #endif
 
 async function loadMoments() {
   if (!babyStore.currentBaby) return
@@ -231,6 +292,7 @@ async function loadMoments() {
     if (momentRes.code === 0 && momentRes.data) {
       moments.value = momentRes.data.items || []
       hasMore.value = moments.value.length >= 20
+      void cacheMomentImages(moments.value)
     }
     if (videoRes && videoRes.code === 0 && videoRes.data) {
       videos.value = videoRes.data.list || []
@@ -266,6 +328,7 @@ async function loadMonthMoments() {
     if (momentRes.code === 0 && momentRes.data) {
       moments.value = momentRes.data
       hasMore.value = false
+      void cacheMomentImages(moments.value)
     }
     if (videoRes && videoRes.code === 0 && videoRes.data) {
       videos.value = videoRes.data.list || []
@@ -288,6 +351,7 @@ async function loadMore() {
     if (res.code === 0 && res.data?.items) {
       moments.value.push(...res.data.items)
       hasMore.value = res.data.items.length >= 20
+      void cacheMomentImages(res.data.items)
     }
   } finally {
     loadingMore.value = false
@@ -306,6 +370,42 @@ function nextMonth() {
   const date = new Date(year, month, 1)
   currentMonth.value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
   loadMonthMoments()
+}
+
+function getMomentImageUrl(item: MomentInfo): string {
+  const localUrl = localMomentImageUrls.value[item.id]
+  if (localUrl) return localUrl
+
+  const remoteUrl = resolveMediaUrl(item.media_url, '')
+  if (remoteUrl.startsWith('http://') && isHttpMediaAllowedForTesting()) {
+    // 真机不能稳定地把 HTTP 地址直接交给 image，等待本地缓存完成。
+    return ''
+  }
+  return remoteUrl
+}
+
+async function cacheMomentImage(item: MomentInfo): Promise<void> {
+  if (!isPhoto(item) || localMomentImageUrls.value[item.id]) return
+
+  const remoteUrl = resolveRemoteMediaUrl(item.media_url)
+  if (!remoteUrl.startsWith('http://') || !isHttpMediaAllowedForTesting()) return
+
+  try {
+    const localUrl = await cacheRemoteImageToLocalFile(remoteUrl)
+    localMomentImageUrls.value = {
+      ...localMomentImageUrls.value,
+      [item.id]: localUrl,
+    }
+  } catch (error) {
+    console.warn('[moment] cacheMomentImage', item.id, error)
+  }
+}
+
+async function cacheMomentImages(items: MomentInfo[]): Promise<void> {
+  // 顺序缓存，避免真机同时请求大量大图导致内存峰值。
+  for (const item of items) {
+    await cacheMomentImage(item)
+  }
 }
 
 function isPhoto(item: MomentInfo) {
@@ -329,6 +429,7 @@ function getCaption(item: MomentInfo) {
 function openDetail(item: MomentInfo) {
   selectedMoment.value = item
   playingVideoUrl.value = ''
+  void cacheMomentImage(item)
 }
 
 function handleCardClick(item: TimelineItem) {
@@ -349,38 +450,132 @@ function closeDetail() {
   playingVideoUrl.value = ''
 }
 
-async function shareMoment(item: MomentInfo) {
+async function downloadMoment(item: MomentInfo) {
+  if (downloadingMomentId.value !== null) {
+    uni.showToast({ title: '照片正在保存，请稍候', icon: 'none' })
+    return
+  }
+
+  downloadingMomentId.value = item.id
+  uni.showLoading({ title: '保存中...', mask: true })
   try {
-    const res = await shareMomentApi({ moment_ids: [item.id] })
-    if (res.code === 0 && res.data) {
-      uni.setClipboardData({
-        data: res.data.share_url,
-        success: () => uni.showToast({ title: '分享链接已复制', icon: 'success' }),
-      })
-    } else {
-      uni.showToast({ title: res.message || '分享失败', icon: 'none' })
+    const res = await downloadMomentApi(item.id)
+    if (res.code !== 0 || !res.data?.download_url) {
+      throw new Error(res.message || '未获取到照片地址')
     }
+
+    const downloadUrl = resolveRemoteMediaUrl(res.data.download_url)
+    if (!downloadUrl) throw new Error('照片地址无效')
+    if (!isHttpMediaAllowedForTesting() && !downloadUrl.startsWith('https://')) {
+      throw new Error('正式环境照片地址必须使用 HTTPS')
+    }
+
+    const tempFilePath = await downloadImage(downloadUrl)
+    const saved = await saveImageWithPermission(tempFilePath)
+    if (saved) uni.showToast({ title: '已保存到相册', icon: 'success' })
   } catch (e) {
-    console.error('[moment] shareMoment', e)
-    uni.showToast({ title: '分享请求失败', icon: 'none' })
+    console.error('[moment] downloadMoment', e)
+    uni.showToast({ title: getDownloadErrorMessage(e), icon: 'none' })
+  } finally {
+    uni.hideLoading()
+    downloadingMomentId.value = null
   }
 }
 
-async function downloadMoment(item: MomentInfo) {
-  try {
-    const res = await downloadMomentApi(item.id)
-    if (res.code === 0 && res.data) {
-      uni.downloadFile({
-        url: res.data.download_url,
-        success: () => uni.showToast({ title: '已保存到相册', icon: 'success' }),
-      })
-    } else {
-      uni.showToast({ title: res.message || '下载失败', icon: 'none' })
+async function downloadImage(url: string): Promise<string> {
+  if (url.startsWith('http://') && isHttpMediaAllowedForTesting()) {
+    try {
+      return await cacheRemoteImageToLocalFile(url)
+    } catch (error) {
+      console.warn('[moment] cacheRemoteImageToLocalFile', error)
     }
-  } catch (e) {
-    console.error('[moment] downloadMoment', e)
-    uni.showToast({ title: '下载请求失败', icon: 'none' })
   }
+
+  return downloadImageFile(url)
+}
+
+function downloadImageFile(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    uni.downloadFile({
+      url,
+      success: (res) => {
+        if (res.statusCode >= 200 && res.statusCode < 300 && res.tempFilePath) {
+          resolve(res.tempFilePath)
+          return
+        }
+        reject(new Error(`照片下载失败(${res.statusCode})`))
+      },
+      fail: reject,
+    })
+  })
+}
+
+function saveImageToAlbum(filePath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    uni.saveImageToPhotosAlbum({
+      filePath,
+      success: () => resolve(),
+      fail: reject,
+    })
+  })
+}
+
+async function saveImageWithPermission(filePath: string): Promise<boolean> {
+  try {
+    await saveImageToAlbum(filePath)
+    return true
+  } catch (error) {
+    if (!isAlbumPermissionDenied(error)) throw error
+  }
+
+  const shouldOpenSetting = await confirmOpenAlbumSetting()
+  if (!shouldOpenSetting) return false
+
+  const granted = await openAlbumSetting()
+  if (!granted) {
+    uni.showToast({ title: '未获得相册权限', icon: 'none' })
+    return false
+  }
+
+  await saveImageToAlbum(filePath)
+  return true
+}
+
+function isAlbumPermissionDenied(error: unknown): boolean {
+  const message = String((error as any)?.errMsg || (error as any)?.message || '').toLowerCase()
+  return message.includes('auth deny')
+    || message.includes('authorize:fail')
+    || message.includes('permission denied')
+    || message.includes('scope.writephotosalbum')
+}
+
+function confirmOpenAlbumSetting(): Promise<boolean> {
+  return new Promise(resolve => {
+    uni.showModal({
+      title: '需要相册权限',
+      content: '请在设置中允许保存图片到相册，然后重新保存。',
+      confirmText: '去设置',
+      success: result => resolve(result.confirm),
+      fail: () => resolve(false),
+    })
+  })
+}
+
+function openAlbumSetting(): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    uni.openSetting({
+      success: result => resolve(Boolean(result.authSetting['scope.writePhotosAlbum'])),
+      fail: reject,
+    })
+  })
+}
+
+function getDownloadErrorMessage(error: unknown): string {
+  const message = String((error as any)?.message || (error as any)?.errMsg || '')
+  if (message.includes('HTTPS')) return message
+  if (message.includes('相册') || message.toLowerCase().includes('photosalbum')) return '保存到相册失败'
+  if (message.includes('照片地址')) return message
+  return '照片下载或保存失败'
 }
 
 function formatDateKey(time: string | null | undefined) {
@@ -555,7 +750,7 @@ function formatDateTime(time: string | null | undefined) {
   overflow: hidden;
   margin-right: 18rpx;
   flex-shrink: 0;
-  background: #1f2937;
+  background: #f2f4f7;
 }
 
 .moment-image,
@@ -568,6 +763,7 @@ function formatDateTime(time: string | null | undefined) {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: #1f2937;
 }
 
 .moment-info {
@@ -612,6 +808,25 @@ function formatDateTime(time: string | null | undefined) {
   margin-left: 12rpx;
 }
 
+.icon-action-button,
+.detail-action-button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  line-height: 1;
+}
+
+.icon-action-button::after,
+.detail-action-button::after {
+  border: 0;
+}
+
+.icon-action-button[disabled],
+.detail-action-button[disabled] {
+  opacity: 0.45;
+}
+
 .grid-view {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -623,7 +838,7 @@ function formatDateTime(time: string | null | undefined) {
   aspect-ratio: 1;
   border-radius: 18rpx;
   overflow: hidden;
-  background: #1f2937;
+  background: #f2f4f7;
 }
 
 .grid-image,
@@ -636,6 +851,7 @@ function formatDateTime(time: string | null | undefined) {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: #1f2937;
 }
 
 .grid-badge {
@@ -698,7 +914,7 @@ function formatDateTime(time: string | null | undefined) {
 
 .detail-media {
   height: 430rpx;
-  background: #1f2937;
+  background: #f2f4f7;
 }
 
 .detail-image,
@@ -710,6 +926,7 @@ function formatDateTime(time: string | null | undefined) {
 
 .detail-video {
   color: #fff;
+  background: #1f2937;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -753,9 +970,11 @@ function formatDateTime(time: string | null | undefined) {
   margin-top: 28rpx;
 }
 
-.detail-actions text {
+.detail-actions text,
+.detail-action-button {
   color: #e91e63;
   font-size: 27rpx;
   font-weight: 800;
+  line-height: 1.2;
 }
 </style>

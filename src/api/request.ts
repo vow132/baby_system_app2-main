@@ -9,6 +9,24 @@ interface ApiResponse<T = any> {
   data: T
 }
 
+export class ApiError extends Error {
+  statusCode: number
+  code: number | string
+  retryable: boolean
+
+  constructor(message: string, statusCode = 0, code: number | string = -1) {
+    super(message)
+    this.name = 'ApiError'
+    this.statusCode = statusCode
+    this.code = code
+    this.retryable = statusCode === 0 || statusCode === 408 || statusCode === 429 || statusCode >= 500
+  }
+}
+
+export function isRetryableApiError(error: unknown): boolean {
+  return error instanceof ApiError ? error.retryable : true
+}
+
 interface RequestOptions {
   url: string
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -63,10 +81,11 @@ function responseInterceptor<T>(
   if (response.statusCode === 200) {
     if (data.code === 0 || data.code === 200) return data
 
+    const errorText = data.message || serverMessage || '请求失败'
     if (showError) {
-      uni.showToast({ title: data.message || '请求失败', icon: 'none' })
+      uni.showToast({ title: errorText, icon: 'none' })
     }
-    return data
+    throw new ApiError(errorText, response.statusCode, data.code)
   }
 
   if (response.statusCode === 401) {
@@ -75,14 +94,14 @@ function responseInterceptor<T>(
       uni.removeStorageSync(TOKEN_KEY)
       uni.reLaunch({ url: '/pages/login/login' })
     }
-    throw new Error(serverMessage || '登录已过期，请重新登录')
+    throw new ApiError(serverMessage || '登录已过期，请重新登录', 401, 401)
   }
 
   const errorText = serverMessage || `网络错误(${response.statusCode})`
   if (showError) {
     uni.showToast({ title: errorText, icon: 'none' })
   }
-  throw new Error(errorText)
+  throw new ApiError(errorText, response.statusCode, response.statusCode)
 }
 
 export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T>> {
@@ -125,7 +144,7 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
         if (showError) {
           uni.showToast({ title: errorText, icon: 'none' })
         }
-        reject(new Error(errorText))
+        reject(new ApiError(errorText, 0, 'NETWORK_ERROR'))
       },
       complete: () => {
         if (showLoading) uni.hideLoading()

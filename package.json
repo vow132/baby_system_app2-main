@@ -7,7 +7,9 @@
     "dev:mp-weixin": "uni -p mp-weixin",
     "build:mp-weixin": "uni build -p mp-weixin",
     "dev:h5": "uni",
-    "build:h5": "uni build"
+    "build:h5": "uni build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-alpha-5000920260515001",
@@ -26,8 +28,10 @@
     "@dcloudio/uni-stacktracey": "3.0.0-alpha-5000920260515001",
     "@dcloudio/vite-plugin-uni": "^3.0.0-alpha-5000920260515001",
     "@types/node": "^20.11.24",
+    "@vue/compiler-sfc": "^3.4.21",
     "sass": "^1.99.0",
     "typescript": "^5.3.3",
-    "vite": "^5.1.4"
+    "vite": "^5.1.4",
+    "vitest": "^1.6.1"
   }
 }

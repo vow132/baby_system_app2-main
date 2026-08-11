@@ -16,12 +16,28 @@ export interface MomentInfo {
   caption: string | null
   captured_at: string
   created_at: string | null
+  share_path: string
+  share_expires_at: string
 }
 
-// 分享链接
+// 原生小程序分享信息
 export interface ShareResult {
-  share_url: string
-  expire_at: string | null
+  share_path: string
+  image_url: string
+  expires_at: string
+}
+
+// 免登录公开分享页只使用单张照片的最小信息
+export interface PublicMomentInfo {
+  id: number
+  type: 'photo'
+  media_url: string
+  thumbnail_url: string | null
+  caption: string | null
+  captured_at: string
+  created_at: string | null
+  share_path: string
+  share_expires_at: string
 }
 
 /**
@@ -57,9 +73,21 @@ export function shareMoment(data: { moment_id?: number; moment_ids?: number[] })
 }
 
 /**
+ * 通过七天有效的分享令牌免登录查看单张照片
+ * GET /api/v1/moment/public/{token}
+ */
+export function getPublicSharedMoment(token: string) {
+  return get<PublicMomentInfo>(API.MOMENT.PUBLIC(token), undefined, { showError: false })
+}
+
+/**
  * 获取照片视频下载链接
  * GET /api/v1/moment/download/{moment_id}
  */
 export function downloadMoment(momentId: number) {
-  return get<{ download_url: string }>(API.MOMENT.DOWNLOAD(momentId))
+  return get<{ moment_id: number; download_url: string }>(
+    API.MOMENT.DOWNLOAD(momentId),
+    undefined,
+    { showError: false },
+  )
 }

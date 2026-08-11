@@ -199,6 +199,7 @@ export const API = {
     TIMELINE: '/moment/timeline',                                // GET 时间线查看温馨瞬间
     MONTH: (month: string) => `/moment/month/${month}`,          // GET 按月筛选温馨瞬间列表
     SHARE: '/moment/share',                                      // POST 生成分享链接供他人访问
+    PUBLIC: (token: string) => `/moment/public/${encodeURIComponent(token)}`, // GET 免登录查看分享照片
     DOWNLOAD: (moment_id: number) => `/moment/download/${moment_id}`, // GET 获取照片视频下载链接
   },
 
@@ -266,6 +267,10 @@ export const API = {
     CONTENT: '/interaction/content',
     LIBRARY: '/interaction/library',
     HISTORY: '/interaction/history',
+    PLAYBACK_CONTROL: '/interaction/playback/control',
+    PLAYBACK_STATUS: '/interaction/playback/status',
+    PLAYBACK_TIMER: '/interaction/playback/timer',
+    FAVORITE: (contentId: string | number) => `/interaction/favorites/${contentId}`,
   },
 
   SYSTEM: {
