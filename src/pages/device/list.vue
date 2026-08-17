@@ -41,7 +41,7 @@
           <u-icon name="plus" size="48" color="#667eea" />
         </view>
         <text class="add-text">添加设备</text>
-        <text class="add-desc">register 入库建档（首次）</text>
+        <text class="add-desc">使用机身序列号和认领码安全添加</text>
       </view>
     </view>
 
@@ -51,25 +51,30 @@
       <text class="empty-desc">点击上方按钮添加第一台设备</text>
     </view>
 
-    <u-popup :show="showAddDevice" mode="bottom" round="20" @close="showAddDevice = false">
+    <u-popup :show="showAddDevice" mode="bottom" round="20" @close="closeAddPopup">
       <view class="popup-content">
         <view class="popup-header">
-          <text class="popup-title">添加设备</text>
-          <u-icon name="close" size="32" color="#999" @click="showAddDevice = false" />
+          <text class="popup-title">添加并认领设备</text>
+          <u-icon name="close" size="32" color="#999" @click="closeAddPopup" />
         </view>
 
         <view class="form-content">
+          <view class="claim-guide">
+            <u-icon name="lock-fill" size="34" color="#5677fc" />
+            <text>认领码通常印在包装标签或设备机身上，只用于首次绑定。</text>
+          </view>
           <u-form :model="deviceForm" labelPosition="top">
             <u-form-item label="设备序列号" required borderBottom>
               <u-input v-model="deviceForm.device_sn" placeholder="请输入设备序列号" border="none" />
               <text v-if="deviceSnError" class="form-error">{{ deviceSnError }}</text>
             </u-form-item>
-            <u-form-item label="设备名称" required borderBottom>
-              <u-input v-model="deviceForm.device_name" placeholder="例如：三毛的婴儿床" border="none" maxlength="20" />
-              <text v-if="deviceNameError" class="form-error">{{ deviceNameError }}</text>
+            <u-form-item label="设备认领码" required borderBottom>
+              <u-input v-model="deviceForm.claim_code" placeholder="请输入标签上的认领码" border="none" maxlength="64" />
+              <text class="form-help">字母不区分大小写，输入时可省略空格和短横线</text>
             </u-form-item>
-            <u-form-item label="设备型号" borderBottom>
-              <u-input v-model="deviceForm.device_model" placeholder="可选" border="none" />
+            <u-form-item label="设备名称（可选）" borderBottom>
+              <u-input v-model="deviceForm.device_name" placeholder="例如：宝宝房的婴儿床" border="none" maxlength="20" />
+              <text v-if="deviceNameError" class="form-error">{{ deviceNameError }}</text>
             </u-form-item>
             <u-form-item label="绑定宝宝（可选）" borderBottom>
               <picker mode="selector" :range="babyNameOptions" @change="onPickBaby">
@@ -83,8 +88,8 @@
         </view>
 
         <view class="popup-footer">
-          <u-button text="取消" shape="circle" @click="showAddDevice = false" />
-          <u-button type="primary" text="确定添加" shape="circle" :loading="loading" :disabled="!canSubmitAddDevice" @click="handleAddDevice" />
+          <u-button text="取消" shape="circle" @click="closeAddPopup" />
+          <u-button type="primary" text="确认认领" shape="circle" :loading="loading" :disabled="!canSubmitAddDevice" @click="handleAddDevice" />
         </view>
       </view>
     </u-popup>
@@ -122,7 +127,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { bindDevice, getDeviceList, registerDevice, unbindDevice, type DeviceInfo } from '@/api/device'
+import { bindDevice, claimDevice, getDeviceList, unbindDevice, type DeviceInfo } from '@/api/device'
 import { useBabyStore } from '@/stores'
 import { clearRemovedDevice, getDeviceDisplayName, getLocalRegisteredDevices, getRemovedDeviceSnList, removeLocalRegisteredDevice, upsertLocalRegisteredDevice } from '@/common/deviceLocal'
 
@@ -138,8 +143,8 @@ const bindingDevice = ref<DeviceInfo | null>(null)
 
 const deviceForm = reactive({
   device_sn: '',
+  claim_code: '',
   device_name: '',
-  device_model: '',
 })
 
 const visibleDeviceList = computed(() => {
@@ -219,7 +224,7 @@ const deviceNameError = computed(() => {
 
 const canSubmitAddDevice = computed(() => {
   return !!deviceForm.device_sn.trim() &&
-    !!deviceForm.device_name.trim() &&
+    !!deviceForm.claim_code.trim() &&
     !deviceSnError.value &&
     !deviceNameError.value &&
     !loading.value
@@ -277,8 +282,19 @@ function mergeLocalRegisteredDevices(remoteList: DeviceInfo[]) {
 }
 
 function openAddPopup() {
+  deviceForm.device_sn = ''
+  deviceForm.claim_code = ''
+  deviceForm.device_name = ''
   selectedBabyId.value = null
   showAddDevice.value = true
+}
+
+function closeAddPopup() {
+  showAddDevice.value = false
+  deviceForm.device_sn = ''
+  deviceForm.claim_code = ''
+  deviceForm.device_name = ''
+  selectedBabyId.value = null
 }
 
 function goToDetail(device: DeviceInfo) {
@@ -376,8 +392,8 @@ function getBindOccupiedToast() {
 }
 
 async function handleAddDevice() {
-  if (!deviceForm.device_sn.trim() || !deviceForm.device_name.trim()) {
-    uni.showToast({ title: '请先填写序列号和设备名', icon: 'none' })
+  if (!deviceForm.device_sn.trim() || !deviceForm.claim_code.trim()) {
+    uni.showToast({ title: '请填写设备序列号和认领码', icon: 'none' })
     return
   }
   if (isDuplicateDeviceSn(deviceForm.device_sn)) {
@@ -391,56 +407,26 @@ async function handleAddDevice() {
 
   loading.value = true
   try {
-    const registerRes = await registerDevice({
+    const claimRes = await claimDevice({
       device_sn: deviceForm.device_sn.trim(),
-      device_name: deviceForm.device_name.trim(),
-      device_model: deviceForm.device_model || '',
+      claim_code: deviceForm.claim_code.trim(),
+      baby_id: selectedBabyId.value || undefined,
+      device_name: deviceForm.device_name.trim() || undefined,
     })
-
-    if (!isSuccessCode(registerRes.code)) {
-      uni.showToast({ title: registerRes.message || '添加失败', icon: 'none' })
-      return
-    }
-
-    clearRemovedDevice(deviceForm.device_sn)
-    if (!selectedBabyId.value) {
-      upsertLocalRegisteredDevice({
-        device_sn: deviceForm.device_sn,
-        device_name: deviceForm.device_name,
-        device_model: deviceForm.device_model || '',
-        created_at: new Date().toISOString(),
-      })
-      uni.showToast({ title: '设备添加成功', icon: 'success' })
-      showAddDevice.value = false
-      deviceForm.device_sn = ''
-      deviceForm.device_name = ''
-      deviceForm.device_model = ''
-      await loadDevices()
-      return
-    }
-
-    const bindRes = await bindDevice({ device_sn: deviceForm.device_sn, baby_id: selectedBabyId.value })
-    if (!isSuccessCode(bindRes.code)) {
-      const toastText = isDeviceOccupiedMessage(bindRes.message)
-        ? getBindOccupiedToast()
-        : bindRes.message || '设备已添加，绑定失败'
-      uni.showToast({ title: toastText, icon: 'none' })
-      return
-    }
-
-    uni.showToast({ title: '设备添加成功', icon: 'success' })
-    showAddDevice.value = false
-    deviceForm.device_sn = ''
-    deviceForm.device_name = ''
-    deviceForm.device_model = ''
+    if (!isSuccessCode(claimRes.code)) return
+    clearRemovedDevice(deviceForm.device_sn.trim())
+    uni.showToast({ title: '设备认领成功', icon: 'success' })
+    closeAddPopup()
     await loadDevices()
   } catch (e: any) {
-    const msg = String(e?.message || '')
-    if (msg.includes('已注册') || msg.includes('already registered')) {
-      uni.showToast({ title: '序列号已存在', icon: 'none' })
-      return
+    const messages: Record<string, string> = {
+      DEVICE_CREDENTIAL_INVALID: '序列号或认领码不正确，请核对设备标签',
+      DEVICE_ALREADY_CLAIMED: '该设备已被其他家庭认领，请联系设备管理员',
+      DEVICE_CREDENTIAL_LOCKED: '尝试次数过多，请稍后再试',
+      DEVICE_CREDENTIALS_DISABLED: '设备认领功能尚未启用，请联系设备管理员',
+      CREDENTIAL_RATE_LIMITED: '操作过于频繁，请稍后再试',
     }
-    uni.showToast({ title: e?.message || '添加失败', icon: 'none' })
+    uni.showToast({ title: messages[String(e?.code)] || e?.message || '设备认领失败', icon: 'none' })
   } finally {
     loading.value = false
   }
@@ -490,6 +476,9 @@ async function handleAddDevice() {
 .popup-footer { display: flex; gap: 20rpx; margin-top: 30rpx; }
 .popup-footer .u-button { flex: 1; }
 .form-error { display: block; color: #fa3534; font-size: 24rpx; padding: 4rpx 0 8rpx; }
+.form-help { display: block; color: #64748b; font-size: 22rpx; line-height: 1.5; padding: 4rpx 0 8rpx; }
+.claim-guide { display: flex; align-items: flex-start; gap: 14rpx; padding: 20rpx; margin-bottom: 10rpx; border-radius: 14rpx; background: #eef2ff; color: #475569; font-size: 24rpx; line-height: 1.55; }
+.claim-guide text { flex: 1; }
 .picker-value { width: 100%; display: flex; align-items: center; justify-content: space-between; color: #333; padding: 14rpx 0; }
 .empty-tip { color: #94a3b8; font-size: 26rpx; padding: 16rpx 0 28rpx; }
 .baby-list { margin-top: 8rpx; }

@@ -10,6 +10,41 @@
     </view>
 
     <view class="section">
+      <view class="section-title-row">
+        <text class="section-title">设备安全</text>
+        <view v-if="credentialStatus" class="security-badge" :class="credentialStatus.access_status">
+          <text>{{ credentialStatusLabel }}</text>
+        </view>
+      </view>
+      <view class="security-panel">
+        <view v-if="credentialLoading" class="security-state">
+          <u-loading-icon mode="circle" size="30" />
+          <text>正在检查设备凭证</text>
+        </view>
+        <view v-else-if="credentialError" class="security-state error" @click="loadCredentialStatus">
+          <u-icon name="reload" size="32" color="#c2410c" />
+          <view>
+            <text>安全状态暂时无法获取</text>
+            <text class="security-state-hint">点击重试</text>
+          </view>
+        </view>
+        <template v-else>
+          <view class="security-summary">
+            <u-icon :name="credentialStatus?.access_status === 'active' ? 'lock-fill' : 'info-circle'" size="38" :color="credentialStatus?.access_status === 'active' ? '#16875f' : '#a16207'" />
+            <view>
+              <text class="security-summary-title">{{ credentialStatusLabel }}</text>
+              <text class="security-summary-desc">{{ credentialStatusDescription }}</text>
+            </view>
+          </view>
+          <view class="security-meta" v-if="credentialStatus?.token_version">
+            <text>当前凭证版本</text>
+            <text>v{{ credentialStatus.token_version }}</text>
+          </view>
+        </template>
+      </view>
+    </view>
+
+    <view class="section">
       <text class="section-title">设备信息</text>
       <view class="info-list">
         <view class="info-item"><text class="label">固件版本</text><text class="value">{{ firmwareText }}</text></view>
@@ -42,6 +77,15 @@
         <view class="action-item" @click="handleDiagnose"><u-icon name="checkmark-circle" size="40" color="#19be6b" /><text>设备诊断</text></view>
         <view class="action-item" @click="handleReboot"><u-icon name="reload" size="40" color="#ff9900" /><text>远程重启</text></view>
         <view class="action-item" @click="openRename"><u-icon name="edit-pen" size="40" color="#5677fc" /><text>设备改名</text></view>
+        <view class="action-item" :class="{ disabled: credentialActionLoading }" @click="handleCreateRecoveryCode">
+          <u-icon name="lock-open" size="40" color="#5677fc" />
+          <view class="action-copy"><text>生成设备恢复码</text><text>设备丢失凭证时使用，仅显示一次</text></view>
+          <u-icon name="arrow-right" size="28" color="#ccc" />
+        </view>
+        <view class="action-item danger" :class="{ disabled: credentialActionLoading }" @click="handleRevokeCredentials">
+          <u-icon name="lock" size="40" color="#dc2626" />
+          <view class="action-copy"><text>撤销设备访问</text><text>设备将立即无法上报数据或播放内容</text></view>
+        </view>
         <view class="action-item" @click="unbindCurrentDevice"><u-icon name="minus-circle" size="40" color="#fa3534" /><text>解绑设备</text></view>
         <view class="action-item" @click="deactivateDevice"><u-icon name="close-circle" size="40" color="#fa3534" /><text>删除设备</text></view>
       </view>
@@ -58,13 +102,46 @@
         </view>
       </view>
     </u-popup>
+
+    <u-popup :show="showRecoveryPopup" mode="center" round="16" :closeOnClickOverlay="false">
+      <view class="recovery-popup">
+        <view class="recovery-icon"><u-icon name="lock-open" size="46" color="#5677fc" /></view>
+        <text class="recovery-title">设备恢复码</text>
+        <text class="recovery-warning">此恢复码只显示一次，请先复制并通过安全方式交给设备操作人员。</text>
+        <text class="recovery-code" selectable>{{ recoveryCode }}</text>
+        <text class="recovery-expiry">有效期至 {{ recoveryExpiresText }}</text>
+        <view class="popup-actions stacked">
+          <u-button type="primary" text="复制恢复码" shape="circle" @click="copyRecoveryCode" />
+          <u-button text="我已妥善保存" shape="circle" @click="closeRecoveryPopup" />
+        </view>
+      </view>
+    </u-popup>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { deleteDevice, diagnoseDevice, getDeviceBattery, getDeviceList, getDeviceStatus, getFirmwareVersion, rebootDevice, switchDeviceMode, unbindDevice, updateDeviceName, upgradeDevice, type DeviceBattery, type DeviceInfo, type FirmwareVersion } from '@/api/device'
+import {
+  createDeviceRecoveryCode,
+  deleteDevice,
+  diagnoseDevice,
+  getDeviceBattery,
+  getDeviceCredentialStatus,
+  getDeviceList,
+  getDeviceStatus,
+  getFirmwareVersion,
+  rebootDevice,
+  revokeDeviceCredentials,
+  switchDeviceMode,
+  unbindDevice,
+  updateDeviceName,
+  upgradeDevice,
+  type DeviceBattery,
+  type DeviceCredentialStatus,
+  type DeviceInfo,
+  type FirmwareVersion,
+} from '@/api/device'
 import { useBabyStore } from '@/stores'
 import { clearRemovedDevice, getDeviceDisplayName, getLocalRegisteredDevices, markDeviceRemoved, removeLocalRegisteredDevice, setDeviceAlias, upsertLocalRegisteredDevice } from '@/common/deviceLocal'
 
@@ -76,6 +153,13 @@ const firmware = ref<FirmwareVersion | null>(null)
 const deviceSn = ref('')
 const showRenamePopup = ref(false)
 const renameValue = ref('')
+const credentialStatus = ref<DeviceCredentialStatus | null>(null)
+const credentialLoading = ref(false)
+const credentialError = ref('')
+const credentialActionLoading = ref(false)
+const showRecoveryPopup = ref(false)
+const recoveryCode = ref('')
+const recoveryExpiresAt = ref('')
 
 const modes = [
   { label: '睡床', value: 'sleep', icon: 'clock', color: 'linear-gradient(135deg, #5677fc, #3d5afe)', desc: '夜间守护', policy: '全量监测与告警' },
@@ -104,6 +188,23 @@ const currentBindBabyText = computed(() => {
   if (!currentBoundBabyId.value) return '未绑定'
   return babyStore.babyList.find((b) => String(b.id) === String(currentBoundBabyId.value))?.name || `ID:${currentBoundBabyId.value}`
 })
+const credentialStatusLabel = computed(() => {
+  const status = credentialStatus.value?.access_status
+  if (status === 'active') return '设备访问已保护'
+  if (status === 'pending') return '等待设备确认新凭证'
+  if (status === 'legacy') return '兼容模式'
+  if (status === 'revoked') return '设备访问已撤销'
+  return '设备播放功能待初始化'
+})
+const credentialStatusDescription = computed(() => {
+  const status = credentialStatus.value?.access_status
+  if (status === 'active') return '设备请求已使用独立凭证验证'
+  if (status === 'pending') return '保持设备联网，确认后会自动生效'
+  if (status === 'legacy') return '设备仍在使用迁移期凭证，建议尽快完成配网升级'
+  if (status === 'revoked') return '需要重新配网或使用恢复码后才能继续连接'
+  return '完成设备配网后即可安全播放和上报数据'
+})
+const recoveryExpiresText = computed(() => formatTime(recoveryExpiresAt.value))
 
 function isSuccessCode(code: number) {
   return code === 0 || code === 200
@@ -142,6 +243,7 @@ async function loadDevice() {
 
   if (firmwareRes.status === 'fulfilled' && isSuccessCode(firmwareRes.value.code)) firmware.value = firmwareRes.value.data
   if (batteryRes.status === 'fulfilled' && isSuccessCode(batteryRes.value.code)) battery.value = batteryRes.value.data
+  await loadCredentialStatus()
 
   // 如果还是没有设备信息，尝试从本地缓存获取
   if (!device.value) {
@@ -161,6 +263,21 @@ async function loadDevice() {
       }
       renameValue.value = getDeviceDisplayName(deviceSn.value, localDevice.device_name)
     }
+  }
+}
+
+async function loadCredentialStatus() {
+  if (!deviceSn.value) return
+  credentialLoading.value = true
+  credentialError.value = ''
+  try {
+    const res = await getDeviceCredentialStatus(deviceSn.value)
+    credentialStatus.value = res.data
+  } catch (error: any) {
+    credentialStatus.value = null
+    credentialError.value = error?.message || '安全状态加载失败'
+  } finally {
+    credentialLoading.value = false
   }
 }
 
@@ -214,6 +331,66 @@ function handleReboot() {
 function openRename() {
   renameValue.value = displayName.value
   showRenamePopup.value = true
+}
+
+function handleCreateRecoveryCode() {
+  if (credentialActionLoading.value) return
+  uni.showModal({
+    title: '生成设备恢复码',
+    content: '新恢复码会使之前生成但未使用的恢复码立即失效。是否继续？',
+    confirmText: '继续生成',
+    success: async (modalRes) => {
+      if (!modalRes.confirm) return
+      credentialActionLoading.value = true
+      try {
+        const res = await createDeviceRecoveryCode(deviceSn.value)
+        recoveryCode.value = res.data.recovery_code
+        recoveryExpiresAt.value = res.data.expires_at
+        showRecoveryPopup.value = true
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '恢复码生成失败', icon: 'none' })
+      } finally {
+        credentialActionLoading.value = false
+      }
+    },
+  })
+}
+
+function copyRecoveryCode() {
+  if (!recoveryCode.value) return
+  uni.setClipboardData({
+    data: recoveryCode.value,
+    success: () => uni.showToast({ title: '恢复码已复制', icon: 'success' }),
+  })
+}
+
+function closeRecoveryPopup() {
+  showRecoveryPopup.value = false
+  recoveryCode.value = ''
+  recoveryExpiresAt.value = ''
+}
+
+function handleRevokeCredentials() {
+  if (credentialActionLoading.value) return
+  uni.showModal({
+    title: '撤销设备访问',
+    content: '撤销后设备会立即无法上报数据或播放内容，需要重新配网或使用恢复码。确定继续？',
+    confirmText: '撤销访问',
+    confirmColor: '#dc2626',
+    success: async (modalRes) => {
+      if (!modalRes.confirm) return
+      credentialActionLoading.value = true
+      try {
+        await revokeDeviceCredentials(deviceSn.value, { reason: 'parent_action' })
+        uni.showToast({ title: '设备访问已撤销', icon: 'success' })
+        await loadCredentialStatus()
+      } catch (error: any) {
+        uni.showToast({ title: error?.message || '撤销失败', icon: 'none' })
+      } finally {
+        credentialActionLoading.value = false
+      }
+    },
+  })
 }
 
 async function saveRename() {
@@ -309,6 +486,21 @@ function deactivateDevice() {
 .device-sn { font-size: 26rpx; opacity: 0.9; }
 .section { margin: 20rpx 30rpx; }
 .section-title { display: block; font-size: 30rpx; font-weight: 700; color: #333; margin-bottom: 20rpx; }
+.section-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20rpx; }
+.section-title-row .section-title { margin-bottom: 0; }
+.security-badge { padding: 7rpx 16rpx; border-radius: 999rpx; background: #fff7ed; color: #a16207; font-size: 22rpx; }
+.security-badge.active { background: #ecfdf5; color: #047857; }
+.security-badge.revoked { background: #fef2f2; color: #b91c1c; }
+.security-badge.pending { background: #eef2ff; color: #4f46e5; }
+.security-panel { background: #fff; border-radius: 16rpx; padding: 24rpx; }
+.security-state { min-height: 88rpx; display: flex; align-items: center; gap: 16rpx; color: #475569; font-size: 26rpx; }
+.security-state.error { color: #9a3412; }
+.security-state-hint { display: block; margin-top: 6rpx; color: #c2410c; font-size: 22rpx; }
+.security-summary { display: flex; align-items: flex-start; gap: 18rpx; }
+.security-summary > view { flex: 1; }
+.security-summary-title { display: block; color: #1f2937; font-size: 28rpx; font-weight: 700; }
+.security-summary-desc { display: block; margin-top: 8rpx; color: #64748b; font-size: 24rpx; line-height: 1.5; }
+.security-meta { display: flex; justify-content: space-between; margin-top: 20rpx; padding-top: 18rpx; border-top: 1rpx solid #f1f5f9; color: #64748b; font-size: 24rpx; }
 .info-list, .action-list { background: #fff; border-radius: 16rpx; }
 .info-item { display: flex; justify-content: space-between; padding: 24rpx; border-bottom: 1rpx solid #f3f4f6; }
 .info-item:last-child { border-bottom: none; }
@@ -321,13 +513,26 @@ function deactivateDevice() {
 .mode-name { font-size: 28rpx; color: #333; font-weight: 700; line-height: 1.25; }
 .mode-desc { margin-top: 8rpx; font-size: 22rpx; color: #8a94a6; line-height: 1.25; }
 .mode-policy { margin-top: 8rpx; font-size: 21rpx; color: #667eea; line-height: 1.35; text-align: center; }
-.action-item { display: flex; align-items: center; padding: 24rpx; border-bottom: 1rpx solid #f3f4f6; }
+.action-item { min-height: 88rpx; box-sizing: border-box; display: flex; align-items: center; padding: 24rpx; border-bottom: 1rpx solid #f3f4f6; }
 .action-item:last-child { border-bottom: none; }
 .action-item text { flex: 1; margin-left: 20rpx; font-size: 30rpx; }
+.action-item.disabled { opacity: 0.5; pointer-events: none; }
+.action-item.danger { color: #b91c1c; }
+.action-copy { flex: 1; margin-left: 20rpx; }
+.action-copy text { display: block; margin-left: 0; }
+.action-copy text:first-child { font-size: 30rpx; color: inherit; }
+.action-copy text:last-child { margin-top: 7rpx; font-size: 22rpx; line-height: 1.4; color: #64748b; }
 .popup { padding: 26rpx; }
 .popup-title { font-size: 32rpx; font-weight: 600; margin-bottom: 18rpx; display: block; }
 .popup-actions { display: flex; gap: 16rpx; margin-top: 20rpx; }
 .popup-actions .u-button { flex: 1; }
 .rename-popup { width: 620rpx; padding: 28rpx; }
 .rename-title { display: block; font-size: 30rpx; font-weight: 600; margin-bottom: 16rpx; color: #1f2937; }
+.recovery-popup { width: 620rpx; padding: 34rpx 30rpx; text-align: center; }
+.recovery-icon { width: 82rpx; height: 82rpx; margin: 0 auto 18rpx; border-radius: 50%; background: #eef2ff; display: flex; align-items: center; justify-content: center; }
+.recovery-title { display: block; color: #1f2937; font-size: 34rpx; font-weight: 700; }
+.recovery-warning { display: block; margin-top: 14rpx; color: #92400e; font-size: 24rpx; line-height: 1.55; }
+.recovery-code { display: block; margin: 24rpx 0 12rpx; padding: 24rpx 14rpx; border-radius: 14rpx; background: #f1f5f9; color: #111827; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 34rpx; font-weight: 700; letter-spacing: 4rpx; word-break: break-all; }
+.recovery-expiry { display: block; color: #64748b; font-size: 22rpx; }
+.popup-actions.stacked { flex-direction: column; margin-top: 28rpx; }
 </style>

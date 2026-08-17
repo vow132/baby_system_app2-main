@@ -154,7 +154,7 @@
           <text class="section-more" @click="goToEvents">查看全部</text>
         </view>
         <view v-if="events.length > 0" class="event-timeline">
-          <view class="event-row" v-for="event in events.slice(0, 4)" :key="event.id" @click="goToEventDetail(event.id)">
+          <view class="event-row" v-for="event in events.slice(0, 4)" :key="event.source_ref || `${event.source_table}:${event.id}`" @click="goToEventDetail(event)">
             <view class="event-dot" :class="getLevelClass(event.event_level)" />
             <view class="event-body">
               <text class="event-type">{{ getEventTypeName(event.event_type) }}</text>
@@ -286,7 +286,9 @@ const routineAdviceDesc = computed(() => {
   return '先选择月龄，首页会同步显示下一步提醒'
 })
 
-let refreshTimer: number | null = null
+let refreshTimer: ReturnType<typeof setTimeout> | null = null
+let refreshGeneration = 0
+let sensorRequestPending = false
 
 onMounted(() => {
   statusBarHeight.value = uni.getWindowInfo().statusBarHeight || 44
@@ -298,8 +300,8 @@ onShow(() => {
     uni.redirectTo({ url: '/pages/login/login' })
     return
   }
-  loadData()
   startRefresh()
+  loadData()
 })
 
 onHide(() => {
@@ -312,14 +314,22 @@ onUnmounted(() => {
 
 function startRefresh() {
   stopRefresh()
-  refreshTimer = setInterval(() => {
-    loadSensorData()
-  }, 10000) as unknown as number
+  const generation = refreshGeneration
+  scheduleRefresh(generation)
+}
+
+function scheduleRefresh(generation: number) {
+  if (generation !== refreshGeneration) return
+  refreshTimer = setTimeout(async () => {
+    await loadSensorData(generation)
+    scheduleRefresh(generation)
+  }, 10000)
 }
 
 function stopRefresh() {
+  refreshGeneration += 1
   if (refreshTimer) {
-    clearInterval(refreshTimer)
+    clearTimeout(refreshTimer)
     refreshTimer = null
   }
 }
@@ -361,30 +371,40 @@ async function loadDevices() {
   }
 }
 
-async function loadSensorData() {
-  if (!babyStore.currentBaby) {
+async function loadSensorData(generation = refreshGeneration) {
+  const babyId = babyStore.currentBaby?.id
+  if (!babyId) {
     sensorData.value = null
     return
   }
+
+  if (sensorRequestPending) return
 
   const deviceSn = currentBabyDevice.value?.device_sn
   if (!deviceSn) {
     sensorData.value = null
     return
   }
-  const params = { device_sn: deviceSn, baby_id: babyStore.currentBaby.id, page: 1, page_size: 10 }
+  const params = { device_sn: deviceSn, baby_id: babyId, page: 1, page_size: 10 }
 
+  sensorRequestPending = true
   try {
     const res = await getSensorData(params)
+    if (generation !== refreshGeneration || babyStore.currentBaby?.id !== babyId) return
     if (res.code === 0 && res.data?.items?.length) {
       sensorData.value = res.data.items[0]
     } else {
       sensorData.value = null
     }
   } catch (error) {
-    sensorData.value = null
+    if (generation === refreshGeneration && babyStore.currentBaby?.id === babyId) {
+      sensorData.value = null
+    }
     console.warn('获取传感器数据失败:', error)
+  } finally {
+    sensorRequestPending = false
   }
+  if (generation !== refreshGeneration || babyStore.currentBaby?.id !== babyId) return
   const now = new Date()
   updateTime.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
 }
@@ -550,7 +570,10 @@ function goToReport() { uni.navigateTo({ url: '/pages/milestone/report' }) }
 function goToContent() { uni.navigateTo({ url: '/pages/content/index' }) }
 function goToMoment() { uni.navigateTo({ url: '/pages/moment/index' }) }
 function goToEvents() { uni.navigateTo({ url: '/pages/monitor/events' }) }
-function goToEventDetail(id: number) { uni.navigateTo({ url: `/pages/monitor/detail?id=${id}` }) }
+function goToEventDetail(event: MonitoringEvent) {
+  const source = encodeURIComponent(event.source_table || 'monitoring_events')
+  uni.navigateTo({ url: `/pages/monitor/detail?id=${event.id}&source_table=${source}` })
+}
 function goToRoutine() { uni.navigateTo({ url: '/pages/routine/index' }) }
 function goToRoutineAdvice() { uni.navigateTo({ url: '/pages/routine/optimize' }) }
 function goToAI() { uni.navigateTo({ url: '/pages/ai/index' }) }

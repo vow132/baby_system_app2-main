@@ -5,60 +5,77 @@ import { getDeviceList } from './api/device'
 import { getBabyStatus } from './api/monitor'
 import { TOKEN_KEY } from './api/config'
 
-let statusTimer: ReturnType<typeof setInterval> | null = null
-let lastAlertLevel = -1
-let statusRequestPending = false
+let statusTimer: ReturnType<typeof setTimeout> | null = null
+const lastAlertLevels = new Map<string, number>()
+let dangerPollingGeneration = 0
+let dangerPollingActive = false
 
 async function startDangerPolling() {
-  if (statusTimer) return
+  if (dangerPollingActive) return
+  dangerPollingActive = true
+  const generation = ++dangerPollingGeneration
+  await pollDangerStatuses(generation)
+}
+
+async function pollDangerStatuses(generation: number) {
+  if (!dangerPollingActive || generation !== dangerPollingGeneration) return
+  const token = uni.getStorageSync(TOKEN_KEY)
+  if (!token) {
+    stopDangerPolling()
+    return
+  }
+
   try {
     const res = await getDeviceList()
-    const devices = (res.code === 0 && Array.isArray(res.data)) ? res.data : []
-    const deviceSn = devices[0]?.device_sn
-    if (!deviceSn) return
-    statusTimer = setInterval(async () => {
-      const token = uni.getStorageSync(TOKEN_KEY)
-      if (!token) {
-        stopDangerPolling()
-        return
-      }
-      // Skip this cycle while the previous request is still pending.
-      if (statusRequestPending) return
-      statusRequestPending = true
-      try {
-      const statusRes = await getBabyStatus(deviceSn)
+    const devices = (res.code === 0 && Array.isArray(res.data))
+      ? res.data.filter(device => device.baby_id != null)
+      : []
+    const statuses = await Promise.allSettled(
+      devices.map(device => getBabyStatus(device.device_sn)),
+    )
+    if (!dangerPollingActive || generation !== dangerPollingGeneration) return
+
+    let alertShown = false
+    statuses.forEach((result, index) => {
+      const device = devices[index]
+      if (result.status !== 'fulfilled' || !device) return
+      const statusRes = result.value
       const level = statusRes?.data?.status_level ?? 0
-      if (level === 3 && lastAlertLevel !== 3) {
-        const snap = statusRes.data?.sensor_snapshot
-        const content = [
-          statusRes.data?.risk_label ? `风险等级：${statusRes.data.risk_label}` : '',
-          snap?.heart_rate != null ? `心率：${snap.heart_rate} 次/分` : '',
-          snap?.breath_rate != null ? `呼吸：${snap.breath_rate} 次/分` : '',
-        ].filter(Boolean).join('\n') || '宝宝当前处于危险状态，请立即查看'
-        uni.showModal({
-          title: '⚠ 危险警报',
-          content,
-          confirmText: '查看详情',
-          cancelText: '知道了',
-          success(r) {
-            if (r.confirm) uni.navigateTo({ url: '/pages/monitor/index' })
-          },
-        })
-      }
-      lastAlertLevel = level
-      } catch (error) {
-        // A background polling failure must not become an unhandled Promise.
-        console.warn('[danger-polling] /sensor/status/baby request failed; retrying later', error)
-      } finally {
-        statusRequestPending = false
-      }
-    }, 10000)
-  } catch (_) {}
+      const previousLevel = lastAlertLevels.get(device.device_sn) ?? -1
+      lastAlertLevels.set(device.device_sn, level)
+      if (alertShown || level < 3 || previousLevel >= 3) return
+
+      alertShown = true
+      const snap = statusRes.data?.sensor_snapshot
+      const content = [
+        device.device_name ? `设备：${device.device_name}` : `设备：${device.device_sn}`,
+        statusRes.data?.risk_label ? `风险等级：${statusRes.data.risk_label}` : '',
+        snap?.heart_rate != null ? `心率：${snap.heart_rate} 次/分` : '',
+        snap?.breath_rate != null ? `呼吸：${snap.breath_rate} 次/分` : '',
+      ].filter(Boolean).join('\n') || '宝宝当前处于危险状态，请立即查看'
+      uni.showModal({
+        title: '⚠ 危险警报',
+        content,
+        confirmText: '查看详情',
+        cancelText: '知道了',
+        success(r) {
+          if (r.confirm) uni.navigateTo({ url: '/pages/monitor/index' })
+        },
+      })
+    })
+  } catch (error) {
+    console.warn('[danger-polling] 危险状态刷新失败，将自动重试', error)
+  } finally {
+    if (dangerPollingActive && generation === dangerPollingGeneration) {
+      statusTimer = setTimeout(() => void pollDangerStatuses(generation), 10000)
+    }
+  }
 }
 
 function stopDangerPolling() {
-  if (statusTimer) { clearInterval(statusTimer); statusTimer = null }
-  statusRequestPending = false
+  dangerPollingActive = false
+  dangerPollingGeneration += 1
+  if (statusTimer) { clearTimeout(statusTimer); statusTimer = null }
 }
 
 export default {
@@ -75,7 +92,7 @@ export default {
   onShow() {
     console.log('App Show')
     const userStore = useUserStore()
-    if (userStore.isLoggedIn && !statusTimer) startDangerPolling()
+    if (userStore.isLoggedIn && !dangerPollingActive) startDangerPolling()
   },
   onHide() {
     console.log('App Hide')

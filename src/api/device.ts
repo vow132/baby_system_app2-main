@@ -48,6 +48,25 @@ export interface FirmwareVersion {
   need_upgrade?: boolean | number
 }
 
+export interface DeviceCredentialStatus {
+  device_sn: string
+  credential_service_enabled: boolean
+  factory_provisioned: boolean
+  activation_status: string | null
+  claimed: boolean
+  token_version: number | null
+  token_status: string | null
+  legacy_token_configured: boolean
+  access_status: 'active' | 'pending' | 'legacy' | 'revoked' | 'not_initialized'
+}
+
+export interface DeviceRecoveryCode {
+  device_sn: string
+  recovery_code: string
+  expires_at: string
+  display_once: boolean
+}
+
 // ========== 小程序端接口 ==========
 
 /**
@@ -92,8 +111,44 @@ export function getDeviceBattery(deviceSn: string) {
  * 绑定设备到宝宝
  * POST /api/v1/device/bind
  */
-export function bindDevice(data: { device_sn: string; baby_id: number }) {
+export function bindDevice(data: { device_sn: string; baby_id: number; claim_code?: string }) {
   return post(API.DEVICE.BIND, data)
+}
+
+export function claimDevice(data: {
+  device_sn: string
+  claim_code: string
+  baby_id?: number
+  device_name?: string
+}) {
+  return post(API.DEVICE.CLAIM, data, { showError: false })
+}
+
+export function getDeviceCredentialStatus(deviceSn: string) {
+  return get<DeviceCredentialStatus>(
+    API.DEVICE.CREDENTIAL_STATUS(deviceSn),
+    undefined,
+    { showError: false },
+  )
+}
+
+export function createDeviceRecoveryCode(deviceSn: string) {
+  return post<DeviceRecoveryCode>(
+    API.DEVICE.RECOVERY_CODE(deviceSn),
+    undefined,
+    { showError: false },
+  )
+}
+
+export function revokeDeviceCredentials(
+  deviceSn: string,
+  data: { reason?: string; revoke_activation?: boolean } = {},
+) {
+  return post(
+    API.DEVICE.REVOKE_CREDENTIALS(deviceSn),
+    data,
+    { showError: false },
+  )
 }
 
 /**

@@ -35,49 +35,49 @@ export interface LoginResponse {
  * 用户注册
  */
 export function register(data: { phone: string; password: string; nickname?: string }) {
-  return post<LoginResponse>(API.AUTH.REGISTER, data, { ignore401: true })
+  return post<LoginResponse>(API.AUTH.REGISTER, data, { ignore401: true, showError: false })
 }
 
 /**
  * 用户登录
  */
 export function login(data: { phone: string; password: string }) {
-  return post<LoginResponse>(API.AUTH.LOGIN, data, { ignore401: true })
+  return post<LoginResponse>(API.AUTH.LOGIN, data, { ignore401: true, showError: false })
 }
 
 /**
  * 发送短信验证码
  */
-export function sendSmsCode(data: { phone: string; scene: 'login' | 'reset_password' | 'bind_phone' | 'change_phone_old' | 'change_phone_new' }) {
-  return post(API.AUTH.SMS_CODE, data, { ignore401: true })
+export function sendSmsCode(data: { phone: string; scene: 'login' | 'reset_password' | 'bind_phone' }) {
+  return post(API.AUTH.SMS_CODE, data, { ignore401: true, showError: false })
 }
 
 /**
  * 手机验证码登录
  */
 export function codeLogin(data: { phone: string; code: string }) {
-  return post<LoginResponse>(API.AUTH.CODE_LOGIN, data, { ignore401: true })
+  return post<LoginResponse>(API.AUTH.CODE_LOGIN, data, { ignore401: true, showError: false })
 }
 
 /**
  * 忘记密码重置
  */
 export function resetPassword(data: { phone: string; code: string; new_password: string }) {
-  return post(API.AUTH.RESET_PASSWORD, data)
+  return post(API.AUTH.RESET_PASSWORD, data, { ignore401: true, showError: false })
 }
 
 /**
  * 登录态修改密码
  */
 export function changePassword(data: { old_password: string; new_password: string }) {
-  return post(API.AUTH.CHANGE_PASSWORD, data, { ignore401: true })
+  return post(API.AUTH.CHANGE_PASSWORD, data, { showError: false })
 }
 
 /**
  * 绑定或更换手机号
  */
 export function bindPhone(data: { phone: string; code: string }) {
-  return post(API.AUTH.BIND_PHONE, data)
+  return post(API.AUTH.BIND_PHONE, data, { showError: false })
 }
 
 /**
@@ -88,21 +88,21 @@ export function changePhone(data: {
   new_phone: string
   new_phone_code: string
 }) {
-  return post(API.AUTH.BIND_PHONE, data)
+  return post(API.AUTH.BIND_PHONE, data, { showError: false })
 }
 
 /**
  * 注销账号
  */
 export function cancelAccount(data: { confirm_text: string; password?: string }) {
-  return post(API.AUTH.CANCEL_ACCOUNT, data, { ignore401: true })
+  return post(API.AUTH.CANCEL_ACCOUNT, data, { showError: false })
 }
 
 /**
  * 微信登录
  */
 export function wechatLogin(data: { code: string }) {
-  return post<LoginResponse>(API.AUTH.WECHAT_LOGIN, data, { ignore401: true })
+  return post<LoginResponse>(API.AUTH.WECHAT_LOGIN, data, { ignore401: true, showError: false })
 }
 
 /** 将已登录的手机号账号绑定到当前小程序 OpenID。 */

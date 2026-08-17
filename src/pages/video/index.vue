@@ -16,14 +16,20 @@
     <view class="video-list">
       <view class="video-card" v-for="video in filteredVideos" :key="video.id" @click="playVideo(video)">
         <view class="video-cover">
-          <view class="cover-placeholder">
+          <image
+            v-if="video.img_url"
+            class="cover-image"
+            :src="resolveVideoUrl(video.img_url)"
+            mode="aspectFill"
+          />
+          <view v-else class="cover-placeholder">
             <u-icon name="play-circle-fill" size="36" color="rgba(255,255,255,0.9)" />
           </view>
           <view class="video-duration" v-if="video.duration">{{ formatDuration(video.duration) }}</view>
           <view class="video-status-badge" :class="video.status">{{ getStatusText(video.status) }}</view>
         </view>
         <view class="video-info">
-          <text class="video-name">{{ video.file_name }}</text>
+          <text class="video-name">{{ video.file_name || '宝宝视频' }}</text>
           <view class="video-meta">
             <text class="meta-item">
               <u-icon name="calendar" size="14" color="#999" />
@@ -55,7 +61,7 @@
     <u-popup :show="showPlayer" mode="center" round="12" @close="showPlayer = false">
       <view class="player-popup">
         <view class="player-header">
-          <text class="player-title">{{ playingVideo?.file_name }}</text>
+          <text class="player-title">{{ playingVideo?.file_name || '宝宝视频' }}</text>
           <u-icon name="close" size="20" color="#999" @click="showPlayer = false" />
         </view>
         <view class="player-body">
@@ -112,7 +118,7 @@ async function loadVideos() {
     }
     const res = await getVideoList({ device_sn: deviceSn, page: 1, page_size: 50 })
     if (res.code === 0 && res.data) {
-      videos.value = Array.isArray(res.data) ? res.data : (res.data.list || [])
+      videos.value = res.data.list || []
     } else {
       videos.value = []
     }
@@ -195,6 +201,7 @@ function formatFileSize(bytes: number | null) {
 .video-list { }
 .video-card { display: flex; align-items: center; background: #fff; border-radius: 16rpx; padding: 20rpx; margin-bottom: 14rpx; }
 .video-cover { position: relative; width: 140rpx; height: 100rpx; border-radius: 10rpx; overflow: hidden; margin-right: 18rpx; flex-shrink: 0; }
+.cover-image { display: block; width: 100%; height: 100%; }
 .cover-placeholder { width: 100%; height: 100%; background: linear-gradient(135deg, #1f2937, #374151); display: flex; align-items: center; justify-content: center; }
 .video-duration { position: absolute; bottom: 6rpx; right: 6rpx; background: rgba(0,0,0,0.6); color: #fff; font-size: 18rpx; padding: 2rpx 8rpx; border-radius: 4rpx; }
 .video-status-badge { position: absolute; top: 6rpx; left: 6rpx; font-size: 16rpx; padding: 2rpx 8rpx; border-radius: 4rpx; background: rgba(25,190,107,0.8); color: #fff; }

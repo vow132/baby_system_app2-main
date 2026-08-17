@@ -14,12 +14,13 @@
 // ========== 后端地址配置 ==========
 // 开发环境（小程序连真实后端）
 const DEV_BASE_URL = 'http://223.247.96.246:8123/api/v1'
-// 生产环境
-const PROD_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://your-api-domain.com/api/v1'
+const normalizeBaseUrl = (url: string) => url.trim().replace(/\/+$/, '')
+// 测试/生产构建从 Vite mode 环境文件读取；vite.config.ts 会阻止正式包使用占位域名。
+const PROD_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL || DEV_BASE_URL)
 
 // 外部音色服务地址（新 TTS/音色服务端口）
 const DEV_SPEECH_BASE_URL = 'http://223.247.96.246:40028/v1'
-const PROD_SPEECH_BASE_URL = import.meta.env.VITE_SPEECH_BASE_URL || 'https://your-speech-domain.com/v1'
+const PROD_SPEECH_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_SPEECH_BASE_URL || DEV_SPEECH_BASE_URL)
 
 // 开发构建连接测试 IP；生产构建必须通过 VITE_API_BASE_URL 指向 HTTPS 合法域名。
 export const BASE_URL = import.meta.env.DEV ? DEV_BASE_URL : PROD_BASE_URL
@@ -107,6 +108,10 @@ export const API = {
     UPDATE_NAME: '/device/name',  // PUT 修改设备名称（小程序）
     MODE_SWITCH: '/device/mode/switch',                            // POST 切换睡床/游戏床/拼床模式（共用）
     MODE_HISTORY: '/device/mode/history',                          // GET 查看设备模式切换历史记录（共用）
+    CLAIM: '/device/claim',
+    CREDENTIAL_STATUS: (device_sn: string) => `/device/${device_sn}/credentials/status`,
+    RECOVERY_CODE: (device_sn: string) => `/device/${device_sn}/credentials/recovery-code`,
+    REVOKE_CREDENTIALS: (device_sn: string) => `/device/${device_sn}/credentials/revoke`,
   },
 
   // ========== 传感器模块（10个：3硬件+1小程序+4共用+2小程序） ==========
@@ -286,14 +291,12 @@ export const API = {
     CHECK: '/',  // GET 健康检查根端点
   },
 
-  // ========== 视频识别模块（7个：1小程序+6硬件） ==========
+  // ========== 家长端视频管理模块（硬件上传/分析不在小程序封装） ==========
   VIDEO: {
-    STREAM: (filename: string) => `/video/stream/${filename}`,       // GET 获取视频流（小程序）
-    UPLOAD: '/video/upload',                                          // POST 上传视频文件（硬件）
-    DETAIL: (video_id: number) => `/video/get/${video_id}`,          // GET 视频信息根据id查询（硬件）
-    UPDATE: (video_id: number) => `/video/update/${video_id}`,       // PUT 更新视频信息（硬件）
-    DELETE: (video_id: number) => `/video/delete/${video_id}`,       // DELETE 删除视频信息（硬件）
-    BY_DEVICE: (device_sn: string) => `/video/by-device/${device_sn}`, // GET 根据设备sn查询（硬件）
-    LIST: '/video/list',                                              // GET 分页查询视频列表（硬件）
+    DETAIL: (video_id: number) => `/video/get/${video_id}`,
+    UPDATE: (video_id: number) => `/video/update/${video_id}`,
+    DELETE: (video_id: number) => `/video/delete/${video_id}`,
+    BY_DEVICE: (device_sn: string) => `/video/by-device/${device_sn}`,
+    LIST: '/video/list',
   },
 }

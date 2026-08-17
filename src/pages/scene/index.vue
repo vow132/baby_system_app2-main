@@ -14,6 +14,11 @@
       </view>
     </view>
 
+    <view class="demo-notice">
+      <u-icon name="info-circle" size="16" color="#475569" />
+      <text>“模拟”和“高危”仅用于界面联调，不代表设备检测结果，也不会控制硬件。</text>
+    </view>
+
     <view class="status-card" :class="currentScene.levelKey">
       <view class="status-main">
         <view class="scene-orb" :class="currentScene.levelKey">
@@ -258,14 +263,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { useBabyStore } from "@/stores"
 import {
   getPassiveEventTypes,
   getResponseHistory,
   triggerResponse,
   getSceneClassify,
-  executeSceneResponse,
   type PassiveEventType,
   type MonitoringEvent,
   type SceneClassifyResult,
@@ -338,21 +342,20 @@ const fallbackScenes: SceneItem[] = [
 const babyStore = useBabyStore()
 const currentSceneKey = ref<string>("sleep")
 const activeCategoryKey = ref<CategoryKey>("sleep")
-const simRunning = ref<boolean>(true)
 const popupVisible = ref<boolean>(false)
 const dataReady = ref(false)
 
 // 自动模式状态
 const autoMode = ref<boolean>(false)
 const classifyResult = ref<SceneClassifyResult | null>(null)
-let classifyTimer: ReturnType<typeof setInterval> | null = null
+let classifyTimer: ReturnType<typeof setTimeout> | null = null
+let classifyGeneration = 0
+let classifyPending = false
 
 // 远端数据
 const remoteCategoryList = ref<CategoryEntry[]>([])
 const remoteSceneList = ref<SceneItem[]>([])
 const responseHistory = ref<HistoryItem[]>([])
-
-let timer: ReturnType<typeof setInterval> | null = null
 
 // ====== 数据选择：远端优先 ======
 const categoryList = computed(() => remoteCategoryList.value.length ? remoteCategoryList.value : fallbackCategories)
@@ -574,41 +577,50 @@ function onModeChange(val: boolean) {
 
 async function startAutoClassify() {
   if (!babyStore.currentBaby?.id) return
-  // 立即执行一次
-  await fetchClassifyResult()
-  // 定时轮询（每3秒）
-  classifyTimer = setInterval(fetchClassifyResult, 3000)
+  stopAutoClassify()
+  const generation = classifyGeneration
+  await fetchClassifyResult(generation)
+  scheduleClassify(generation)
 }
 
 function stopAutoClassify() {
+  classifyGeneration += 1
   classifyResult.value = null
   if (classifyTimer) {
-    clearInterval(classifyTimer)
+    clearTimeout(classifyTimer)
     classifyTimer = null
   }
 }
 
-async function fetchClassifyResult() {
-  if (!babyStore.currentBaby?.id) return
+function scheduleClassify(generation: number) {
+  if (!autoMode.value || generation !== classifyGeneration) return
+  classifyTimer = setTimeout(async () => {
+    await fetchClassifyResult(generation)
+    scheduleClassify(generation)
+  }, 3000)
+}
+
+async function fetchClassifyResult(generation = classifyGeneration) {
+  const babyId = babyStore.currentBaby?.id
+  if (!babyId || classifyPending) return
+  classifyPending = true
   try {
-    const res = await getSceneClassify(babyStore.currentBaby.id)
-    if (isSuccess(res.code) && res.data) {
+    const res = await getSceneClassify(babyId)
+    if (generation !== classifyGeneration || babyStore.currentBaby?.id !== babyId) return
+    if (isSuccess(res.code) && res.data && res.data.scene_type !== 'unknown') {
       classifyResult.value = res.data
-      // 自动触发场景
       const sceneKey = mapSceneTypeToKey(res.data.scene_type)
-      if (sceneKey) {
-        // 自动模式使用 executeSceneResponse 接口
-        await executeSceneResponse({
-          baby_id: babyStore.currentBaby.id,
-          scene_type: res.data.scene_type,
-          response_mode: 'auto'
-        })
-        // 同时更新前端显示
+      if (sceneKey && sceneKey !== currentSceneKey.value) {
+        // 这里只更新识别展示；硬件控制必须走已实现且可确认的专用协议。
         triggerScene(sceneKey)
       }
+    } else {
+      classifyResult.value = null
     }
-  } catch {
-    // 静默处理
+  } catch (error) {
+    console.warn('[scene] 场景识别刷新失败，将自动重试', error)
+  } finally {
+    classifyPending = false
   }
 }
 
@@ -630,32 +642,13 @@ function mapSceneTypeToKey(sceneType: string): string | null {
   return map[sceneType] || null
 }
 
-// ====== 模拟轮询 ======
-function startSim() {
-  stopSim()
-  if (!simRunning.value) return
-  timer = setInterval(() => {
-    triggerRandomScene()
-  }, 6000)
-}
-
-function stopSim() {
-  if (timer) { clearInterval(timer); timer = null }
-}
-
-watch(simRunning, (running) => {
-  running ? startSim() : stopSim()
-})
-
 onMounted(async () => {
   await fetchEventTypes()
   await fetchHistory()
   triggerScene(currentSceneKey.value)
-  startSim()
 })
 
 onBeforeUnmount(() => {
-  stopSim()
   stopAutoClassify()
 })
 </script>
@@ -675,6 +668,20 @@ onBeforeUnmount(() => {
   align-items: center;
   margin-bottom: 20rpx;
   padding: 0 4rpx;
+}
+
+.demo-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  margin-bottom: 18rpx;
+  padding: 16rpx 18rpx;
+  border: 1rpx solid #cbd5e1;
+  border-radius: 16rpx;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 22rpx;
+  line-height: 1.55;
 }
 
 .title {
@@ -861,13 +868,13 @@ onBeforeUnmount(() => {
 .scene-orb.urgent {
   background: linear-gradient(135deg, #fbbf24, #f59e0b);
   box-shadow: 0 8rpx 24rpx rgba(245, 158, 11, 0.3);
-  animation: urgent-bounce 1.2s ease-in-out infinite;
+  animation: attention-glow 1.8s ease-in-out infinite;
 }
 .scene-orb.urgent .orb-ring { border-color: rgba(251, 191, 36, 0.25); }
 
-@keyframes urgent-bounce {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.06); }
+@keyframes attention-glow {
+  0%, 100% { box-shadow: 0 8rpx 24rpx rgba(245, 158, 11, 0.3); }
+  50% { box-shadow: 0 10rpx 30rpx rgba(245, 158, 11, 0.5); }
 }
 
 .scene-orb.emergency {

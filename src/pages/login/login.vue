@@ -132,7 +132,7 @@
               v-model="registerForm.password" 
               type="text"
               :password="!showRegisterPassword"
-              placeholder="设置密码(6-32位)"
+              placeholder="设置密码(8-128位)"
               maxlength="32"
             />
             <view class="password-toggle" @click="showRegisterPassword = !showRegisterPassword">
@@ -323,6 +323,8 @@ async function sendLoginCode() {
     } else {
       uni.showToast({ title: res.message || '验证码发送失败', icon: 'none' })
     }
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '验证码发送失败', icon: 'none' })
   } finally {
     loading.value = false
   }
@@ -405,12 +407,12 @@ async function handleRegister() {
     uni.showToast({ title: '请输入正确的手机号', icon: 'none' })
     return
   }
-  if (!registerForm.password || registerForm.password.length < 6) {
-    uni.showToast({ title: '密码至少6位', icon: 'none' })
+  if (!registerForm.password || registerForm.password.length < 8) {
+    uni.showToast({ title: '密码至少8位', icon: 'none' })
     return
   }
-  if (registerForm.password.length > 32) {
-    uni.showToast({ title: '密码不能超过32位', icon: 'none' })
+  if (registerForm.password.length > 128) {
+    uni.showToast({ title: '密码不能超过128位', icon: 'none' })
     return
   }
   if (!registerForm.confirmPassword) {

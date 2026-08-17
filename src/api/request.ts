@@ -13,13 +13,15 @@ export class ApiError extends Error {
   statusCode: number
   code: number | string
   retryable: boolean
+  data: any
 
-  constructor(message: string, statusCode = 0, code: number | string = -1) {
+  constructor(message: string, statusCode = 0, code: number | string = -1, data: any = null) {
     super(message)
     this.name = 'ApiError'
     this.statusCode = statusCode
     this.code = code
-    this.retryable = statusCode === 0 || statusCode === 408 || statusCode === 429 || statusCode >= 500
+    this.data = data
+    this.retryable = statusCode === 0 || statusCode === 408 || statusCode === 429 || (statusCode >= 500 && statusCode !== 501)
   }
 }
 
@@ -70,6 +72,13 @@ function extractServerMessage(raw: any): string {
   return ''
 }
 
+export function extractServerErrorCode(raw: any): number | string {
+  const stableCode = raw?.data?.error_code
+  if (typeof stableCode === 'string' && stableCode) return stableCode
+  if (typeof raw?.code === 'number' || typeof raw?.code === 'string') return raw.code
+  return -1
+}
+
 function responseInterceptor<T>(
   response: UniApp.RequestSuccessCallbackResult,
   showError: boolean,
@@ -85,7 +94,12 @@ function responseInterceptor<T>(
     if (showError) {
       uni.showToast({ title: errorText, icon: 'none' })
     }
-    throw new ApiError(errorText, response.statusCode, data.code)
+    throw new ApiError(
+      errorText,
+      response.statusCode,
+      extractServerErrorCode(response.data),
+      data.data,
+    )
   }
 
   if (response.statusCode === 401) {
@@ -94,14 +108,24 @@ function responseInterceptor<T>(
       uni.removeStorageSync(TOKEN_KEY)
       uni.reLaunch({ url: '/pages/login/login' })
     }
-    throw new ApiError(serverMessage || '登录已过期，请重新登录', 401, 401)
+    throw new ApiError(
+      serverMessage || '登录已过期，请重新登录',
+      401,
+      extractServerErrorCode(response.data),
+      (response.data as any)?.data,
+    )
   }
 
   const errorText = serverMessage || `网络错误(${response.statusCode})`
   if (showError) {
     uni.showToast({ title: errorText, icon: 'none' })
   }
-  throw new ApiError(errorText, response.statusCode, response.statusCode)
+  throw new ApiError(
+    errorText,
+    response.statusCode,
+    extractServerErrorCode(response.data),
+    (response.data as any)?.data,
+  )
 }
 
 export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T>> {

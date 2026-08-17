@@ -6,6 +6,7 @@
   "scripts": {
     "dev:mp-weixin": "uni -p mp-weixin",
     "build:mp-weixin": "uni build -p mp-weixin",
+    "build:mp-weixin:test": "uni build -p mp-weixin --mode test",
     "dev:h5": "uni",
     "build:h5": "uni build",
     "typecheck": "tsc --noEmit",

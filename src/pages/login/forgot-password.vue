@@ -40,8 +40,8 @@
             v-model="form.password"
             type="text"
             :password="!showPassword"
-            placeholder="设置新密码(6-32位)"
-            maxlength="32"
+            placeholder="设置新密码(8-128位)"
+            maxlength="128"
           />
           <view class="password-toggle" @click="showPassword = !showPassword">
             <u-icon :name="showPassword ? 'eye' : 'eye-off'" size="20" color="#999" />
@@ -55,7 +55,7 @@
             type="text"
             :password="!showConfirmPassword"
             placeholder="请再次输入新密码"
-            maxlength="32"
+            maxlength="128"
           />
           <view class="password-toggle" @click="showConfirmPassword = !showConfirmPassword">
             <u-icon :name="showConfirmPassword ? 'eye' : 'eye-off'" size="20" color="#999" />
@@ -122,6 +122,8 @@ async function sendResetCode() {
     } else {
       uni.showToast({ title: res.message || '验证码发送失败', icon: 'none' })
     }
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '验证码发送失败', icon: 'none' })
   } finally {
     loading.value = false
   }
@@ -136,12 +138,12 @@ async function handleResetPassword() {
     uni.showToast({ title: '请输入6位验证码', icon: 'none' })
     return
   }
-  if (!form.password || form.password.length < 6) {
-    uni.showToast({ title: '密码至少6位', icon: 'none' })
+  if (!form.password || form.password.length < 8) {
+    uni.showToast({ title: '密码至少8位', icon: 'none' })
     return
   }
-  if (form.password.length > 32) {
-    uni.showToast({ title: '密码不能超过32位', icon: 'none' })
+  if (form.password.length > 128) {
+    uni.showToast({ title: '密码不能超过128位', icon: 'none' })
     return
   }
   if (form.password !== form.confirmPassword) {
@@ -164,6 +166,8 @@ async function handleResetPassword() {
     } else {
       uni.showToast({ title: res.message || '密码重置失败', icon: 'none' })
     }
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '密码重置失败', icon: 'none' })
   } finally {
     loading.value = false
   }

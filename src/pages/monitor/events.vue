@@ -5,7 +5,7 @@
     </view>
     
     <view class="event-list">
-      <view class="event-item" v-for="event in filteredEvents" :key="event.id" @click="goToDetail(event.id)">
+      <view class="event-item" v-for="event in filteredEvents" :key="event.source_ref || `${event.source_table}:${event.id}`" @click="goToDetail(event)">
         <view class="event-left">
           <view class="level-badge" :class="getLevelClass(event.event_level)">
             {{ getLevelText(event.event_level) }}
@@ -17,7 +17,7 @@
         </view>
         <view class="event-right">
           <view class="event-status" :class="{ handled: event.parent_handled }">
-            {{ event.parent_handled ? '已处理' : '待处理' }}
+            {{ event.can_confirm === false ? '状态记录' : (event.parent_handled ? '已处理' : '待处理') }}
           </view>
           <u-icon name="arrow-right" size="28" color="#ccc" />
         </view>
@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { onLoad, onReachBottom } from '@dcloudio/uni-app'
 import { getEvents, type MonitoringEvent } from '@/api/monitor'
 import { useBabyStore } from '@/stores'
@@ -153,8 +153,9 @@ function formatDateTime(time: string | null) {
   return new Date(time).toLocaleString('zh-CN')
 }
 
-function goToDetail(id: number) {
-  uni.navigateTo({ url: `/pages/monitor/detail?id=${id}` })
+function goToDetail(event: MonitoringEvent) {
+  const source = encodeURIComponent(event.source_table || 'monitoring_events')
+  uni.navigateTo({ url: `/pages/monitor/detail?id=${event.id}&source_table=${source}` })
 }
 </script>
 

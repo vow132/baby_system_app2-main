@@ -99,10 +99,26 @@ npm run dev:mp-weixin
 dist/dev/mp-weixin
 ```
 
-微信小程序构建：
+连接当前 8123 服务的联调构建：
 
 ```bash
+npm run build:mp-weixin:test
+```
+
+正式微信小程序构建：
+
+```bash
+# 先将 .env.example 复制为 .env.production，并填写已备案、已加入微信合法域名的 HTTPS 地址
 npm run build:mp-weixin
+```
+
+正式构建缺少真实 HTTPS API 或音色服务域名时会主动失败，防止发布占位配置。
+正式发布流水线还应执行：
+
+```bash
+npm run typecheck
+npm test -- --run
+npm audit --registry=https://registry.npmjs.org --omit=dev --audit-level=high
 ```
 
 构建产物路径：
@@ -134,10 +150,12 @@ src/api/config.ts
 当前开发环境地址：
 
 ```ts
-const DEV_BASE_URL = 'http://223.247.96.246:34223/api/v1'
+const DEV_BASE_URL = 'http://223.247.96.246:8123/api/v1'
 ```
 
-上线前需要将 `BASE_URL` 切换为正式域名，并在微信小程序后台配置合法请求域名、合法 WebView 域名等。
+8123 HTTP 地址仅用于开发者工具/联调。上线前在 `.env.production` 配置正式 HTTPS
+域名，并在微信小程序后台配置 request、downloadFile、uploadFile 等合法域名；无需
+直接修改 `src/api/config.ts`。
 
 ## 主要页面模块
 

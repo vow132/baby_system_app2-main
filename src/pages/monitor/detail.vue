@@ -50,7 +50,7 @@
     </view>
 
     <view class="footer-actions">
-      <u-button v-if="!event?.parent_handled" type="primary" text="标记为已处理" :loading="loading" @click="handleConfirm" />
+      <u-button v-if="event?.can_confirm !== false && !event?.parent_handled" type="primary" text="标记为已处理" :loading="loading" @click="handleConfirm" />
     </view>
   </view>
 </template>
@@ -61,6 +61,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import { confirmEvent, getEventDetail, getPassiveEventTypes, type MonitoringEvent, type PassiveEventType } from '@/api/monitor'
 
 const eventId = ref<number | null>(null)
+const sourceTable = ref('monitoring_events')
 const event = ref<MonitoringEvent | null>(null)
 const eventTypes = ref<PassiveEventType[]>([])
 const loading = ref(false)
@@ -71,6 +72,7 @@ const eventTypeName = computed(() => eventType.value?.event_name || `事件 #${e
 onLoad((options) => {
   if (options?.id) {
     eventId.value = Number(options.id)
+    sourceTable.value = options.source_table || 'monitoring_events'
     loadData()
   }
 })
@@ -79,7 +81,7 @@ async function loadData() {
   if (!eventId.value) return
   try {
     const results = await Promise.allSettled([
-      getEventDetail(eventId.value),
+      getEventDetail(eventId.value, sourceTable.value),
       getPassiveEventTypes(),
     ])
     const detailRes = results[0].status === 'fulfilled' ? results[0].value : null
@@ -108,7 +110,11 @@ async function handleConfirm() {
   if (!event.value) return
   loading.value = true
   try {
-    const res = await confirmEvent({ event_id: event.value.id, parent_handled: 1 })
+    const res = await confirmEvent({
+      event_id: event.value.id,
+      parent_handled: 1,
+      source_table: event.value.source_table || sourceTable.value,
+    })
     if (res.code === 0) {
       uni.showToast({ title: '已处理', icon: 'success' })
       event.value.parent_handled = 1

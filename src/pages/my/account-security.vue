@@ -57,11 +57,11 @@
         </view>
         <view class="form-group">
           <text class="form-label">新密码</text>
-          <u-input v-model="passwordForm.newPassword" type="password" placeholder="设置新密码(6-32位)" border="surround" clearable />
+          <u-input v-model="passwordForm.newPassword" type="password" maxlength="128" placeholder="设置新密码(8-128位)" border="surround" clearable />
         </view>
         <view class="form-group">
           <text class="form-label">确认新密码</text>
-          <u-input v-model="passwordForm.confirmPassword" type="password" placeholder="请再次输入新密码" border="surround" clearable />
+          <u-input v-model="passwordForm.confirmPassword" type="password" maxlength="128" placeholder="请再次输入新密码" border="surround" clearable />
         </view>
         <view class="panel-actions">
           <u-button text="取消" plain @click="passwordPanelVisible = false" />
@@ -244,12 +244,12 @@ async function handleChangePassword() {
     uni.showToast({ title: '请输入当前密码', icon: 'none' })
     return
   }
-  if (!passwordForm.newPassword || passwordForm.newPassword.length < 6) {
-    uni.showToast({ title: '新密码至少6位', icon: 'none' })
+  if (!passwordForm.newPassword || passwordForm.newPassword.length < 8) {
+    uni.showToast({ title: '新密码至少8位', icon: 'none' })
     return
   }
-  if (passwordForm.newPassword.length > 32) {
-    uni.showToast({ title: '新密码不能超过32位', icon: 'none' })
+  if (passwordForm.newPassword.length > 128) {
+    uni.showToast({ title: '新密码不能超过128位', icon: 'none' })
     return
   }
   if (passwordForm.newPassword !== passwordForm.confirmPassword) {
@@ -264,11 +264,12 @@ async function handleChangePassword() {
       new_password: passwordForm.newPassword,
     })
     if (res.code === 0) {
-      uni.showToast({ title: '密码已修改', icon: 'success' })
+      uni.showToast({ title: '密码已修改，请重新登录', icon: 'success', duration: 1800 })
       passwordPanelVisible.value = false
       passwordForm.oldPassword = ''
       passwordForm.newPassword = ''
       passwordForm.confirmPassword = ''
+      setTimeout(() => userStore.logout(), 900)
     } else {
       uni.showToast({ title: res.message || '修改失败', icon: 'none' })
     }
@@ -289,13 +290,15 @@ async function sendCurrentPhoneCode() {
 
   loading.value = true
   try {
-    const res = await sendSmsCode({ phone: currentPhone, scene: 'change_phone_old' })
+    const res = await sendSmsCode({ phone: currentPhone, scene: 'bind_phone' })
     if (res.code === 0) {
       uni.showToast({ title: '验证码已发送', icon: 'success' })
       startCountdown('old')
     } else {
       uni.showToast({ title: res.message || '验证码发送失败', icon: 'none' })
     }
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '验证码发送失败', icon: 'none' })
   } finally {
     loading.value = false
   }
@@ -314,7 +317,7 @@ async function sendNewPhoneCode() {
   try {
     const res = await sendSmsCode({
       phone,
-      scene: hasBoundPhone.value ? 'change_phone_new' : 'bind_phone',
+      scene: 'bind_phone',
     })
     if (res.code === 0) {
       uni.showToast({ title: '验证码已发送', icon: 'success' })
@@ -322,6 +325,8 @@ async function sendNewPhoneCode() {
     } else {
       uni.showToast({ title: res.message || '验证码发送失败', icon: 'none' })
     }
+  } catch (e: any) {
+    uni.showToast({ title: e?.message || '验证码发送失败', icon: 'none' })
   } finally {
     loading.value = false
   }

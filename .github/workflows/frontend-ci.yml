@@ -38,6 +38,11 @@ jobs:
         run: npm ci
 
       - name: Build WeChat Mini Program
+        env:
+          # CI only verifies that the project compiles. Configure repository
+          # variables to produce an artifact connected to a real environment.
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL || 'https://api.ci.invalid/api/v1' }}
+          VITE_SPEECH_BASE_URL: ${{ vars.VITE_SPEECH_BASE_URL || 'https://speech.ci.invalid/v1' }}
         run: npm run build:mp-weixin
 
       - name: Upload build artifact

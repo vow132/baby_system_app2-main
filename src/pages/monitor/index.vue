@@ -160,7 +160,7 @@
         </view>
 
         <view v-if="events.length > 0" class="event-list">
-          <view class="event-item" v-for="event in events.slice(0, 5)" :key="event.id" @click="goToEventDetail(event.id)">
+          <view class="event-item" v-for="event in events.slice(0, 5)" :key="event.source_ref || `${event.source_table}:${event.id}`" @click="goToEventDetail(event)">
             <view class="event-level" :class="getLevelClass(event.event_level)">
               {{ getLevelText(event.event_level) }}
             </view>
@@ -212,7 +212,10 @@ const updateTime = ref('--:--')
 const statusBarHeight = ref(44)
 const videoMode = ref<'normal' | 'mini' | 'full'>('normal')
 
-const deviceOnline = computed(() => deviceList.value.some(d => d.online_status))
+const currentDevice = computed(() => (
+  deviceList.value.find(d => d.baby_id === babyStore.currentBaby?.id) || null
+))
+const deviceOnline = computed(() => Boolean(currentDevice.value?.online_status))
 
 // 当前宝宝信息
 const currentBabyName = computed(() => babyStore.currentBaby?.name || '选择宝宝')
@@ -311,7 +314,9 @@ const alerts = computed(() => {
     }))
 })
 
-let refreshTimer: number | null = null
+let refreshTimer: ReturnType<typeof setTimeout> | null = null
+let refreshGeneration = 0
+let refreshPending = false
 
 onMounted(() => {
   statusBarHeight.value = uni.getWindowInfo().statusBarHeight || 44
@@ -322,7 +327,6 @@ onShow(() => {
     uni.redirectTo({ url: '/pages/login/login' })
     return
   }
-  loadData()
   startRefresh()
 })
 
@@ -336,34 +340,58 @@ onUnmounted(() => {
 
 function startRefresh() {
   stopRefresh()
-  refreshTimer = setInterval(loadData, 10000) as unknown as number
+  const generation = refreshGeneration
+  void refreshOnce(generation)
 }
 
 function stopRefresh() {
+  refreshGeneration += 1
   if (refreshTimer) {
-    clearInterval(refreshTimer)
+    clearTimeout(refreshTimer)
     refreshTimer = null
   }
 }
 
-async function loadData() {
-  if (!babyStore.currentBaby) return
-  updateTime.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  const deviceRes = await getDeviceList()
-  if (deviceRes.code === 0 && deviceRes.data) deviceList.value = deviceRes.data
-
-  const deviceSn = deviceList.value[0]?.device_sn
-  const reqs: any[] = [
-    getEvents({ baby_id: babyStore.currentBaby.id, page: 1, page_size: 10 }),
-    getPassiveEventTypes(),
-  ]
-  if (deviceSn) {
-    reqs.push(getBabyStatus(deviceSn))
+async function refreshOnce(generation: number) {
+  if (generation !== refreshGeneration) return
+  if (refreshPending) {
+    refreshTimer = setTimeout(() => void refreshOnce(generation), 500)
+    return
   }
-  const [eventRes, typeRes, statusRes] = await Promise.all(reqs)
-  if (statusRes?.code === 0 && statusRes.data) babyStatus.value = statusRes.data
-  if (eventRes.code === 0 && eventRes.data) events.value = eventRes.data.items
-  if (typeRes.code === 0 && typeRes.data) eventTypes.value = typeRes.data
+  refreshPending = true
+  try {
+    await loadData(generation)
+  } finally {
+    refreshPending = false
+    if (generation === refreshGeneration) {
+      refreshTimer = setTimeout(() => void refreshOnce(generation), 10000)
+    }
+  }
+}
+
+async function loadData(generation = refreshGeneration) {
+  const babyId = babyStore.currentBaby?.id
+  if (!babyId) return
+  try {
+    const deviceRes = await getDeviceList()
+    const devices = deviceRes.code === 0 && Array.isArray(deviceRes.data) ? deviceRes.data : []
+    const deviceSn = devices.find(device => device.baby_id === babyId)?.device_sn
+    const reqs: any[] = [
+      getEvents({ baby_id: babyId, page: 1, page_size: 10 }),
+      getPassiveEventTypes(),
+    ]
+    if (deviceSn) reqs.push(getBabyStatus(deviceSn))
+    const [eventRes, typeRes, statusRes] = await Promise.all(reqs)
+    if (generation !== refreshGeneration || babyStore.currentBaby?.id !== babyId) return
+
+    deviceList.value = devices
+    babyStatus.value = statusRes?.code === 0 && statusRes.data ? statusRes.data : null
+    events.value = eventRes.code === 0 && eventRes.data ? eventRes.data.items : []
+    eventTypes.value = typeRes.code === 0 && typeRes.data ? typeRes.data : []
+    updateTime.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  } catch (error) {
+    console.warn('[monitor] 监护数据刷新失败，将自动重试', error)
+  }
 }
 
 function getLevelText(level: number | null) {
@@ -388,7 +416,10 @@ function getCategoryCount(category: string) {
 }
 
 function goToEvents() { uni.navigateTo({ url: '/pages/monitor/events' }) }
-function goToEventDetail(id: number) { uni.navigateTo({ url: `/pages/monitor/detail?id=${id}` }) }
+function goToEventDetail(event: MonitoringEvent) {
+  const source = encodeURIComponent(event.source_table || 'monitoring_events')
+  uni.navigateTo({ url: `/pages/monitor/detail?id=${event.id}&source_table=${source}` })
+}
 function goToRoutine() { uni.navigateTo({ url: '/pages/routine/index' }) }
 function goToRoutineAdvice() { uni.navigateTo({ url: '/pages/routine/optimize' }) }
 function goToScene() { uni.navigateTo({ url: '/pages/scene/index' }) }

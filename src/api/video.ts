@@ -1,8 +1,8 @@
 /**
  * 视频识别API
- * 对齐后端 FastAPI：7个接口（1小程序 + 6硬件）
+ * 家长端视频查询、管理和短期签名媒体地址
  */
-import { get, post, put, del, withQuery } from './request'
+import { get, put, del, withQuery } from './request'
 import { API } from './config'
 import { BASE_URL } from './config'
 
@@ -11,27 +11,21 @@ export interface VideoInfo {
   id: number
   device_sn: string
   video_url: string
-  video_content_text: string
+  img_url?: string | null
+  video_content_text: string | null
   created_at: string
   updated_at: string
+  file_name?: string
+  status?: 'pending' | 'processing' | 'completed' | 'failed'
+  duration?: number | null
+  file_size?: number | null
+  resolution?: string | null
 }
 
 // 视频分页列表
 export interface VideoListResult {
-  items: VideoInfo[]
+  list: VideoInfo[]
   total: number
-  page: number
-  page_size: number
-}
-
-// ========== 小程序端接口 ==========
-
-/**
- * 获取视频流
- * GET /api/v1/video/stream/{filename}
- */
-export function getVideoStream(filename: string) {
-  return get(`${API.VIDEO.STREAM(filename)}`, { responseType: 'blob' })
 }
 
 // ========== 温馨瞬间视频列表（小程序） ==========
@@ -48,10 +42,8 @@ export interface MomentVideoItem {
 }
 
 export interface MomentVideoListResult {
-  items: MomentVideoItem[]
+  list: MomentVideoItem[]
   total: number
-  page: number
-  page_size: number
 }
 
 /**
@@ -78,22 +70,10 @@ export function resolveVideoUrl(url: string | null | undefined): string {
   return host + (url.startsWith('/') ? url : `/${url}`)
 }
 
-// ========== 硬件端接口（小程序不调用，但保留定义） ==========
+// ========== 家长管理接口 ==========
 
 /**
- * 上传视频文件（硬件端）
- * POST /api/v1/video/upload
- */
-export function uploadVideo(data: {
-  device_sn: string
-  video_url: string
-  video_content_text: string
-}) {
-  return post<VideoInfo>(API.VIDEO.UPLOAD, data)
-}
-
-/**
- * 视频信息根据id查询（硬件端）
+ * 家长根据 ID 查询视频
  * GET /api/v1/video/get/{video_id}
  */
 export function getVideoDetail(videoId: number) {
@@ -101,18 +81,17 @@ export function getVideoDetail(videoId: number) {
 }
 
 /**
- * 更新视频信息（硬件端）
+ * 家长更新视频信息
  * PUT /api/v1/video/update/{video_id}
  */
 export function updateVideo(videoId: number, data: {
-  video_url?: string
   video_content_text?: string
 }) {
   return put<VideoInfo>(API.VIDEO.UPDATE(videoId), data)
 }
 
 /**
- * 删除视频信息（硬件端）
+ * 家长删除视频信息
  * DELETE /api/v1/video/delete/{video_id}
  */
 export function deleteVideo(videoId: number) {
@@ -120,7 +99,7 @@ export function deleteVideo(videoId: number) {
 }
 
 /**
- * 根据设备sn查询视频（硬件端）
+ * 家长根据设备 SN 查询视频
  * GET /api/v1/video/by-device/{device_sn}
  */
 export function getVideosByDevice(deviceSn: string) {
@@ -128,7 +107,7 @@ export function getVideosByDevice(deviceSn: string) {
 }
 
 /**
- * 分页查询视频列表（硬件端）
+ * 家长分页查询视频列表
  * GET /api/v1/video/list
  */
 export function getVideoList(params: {

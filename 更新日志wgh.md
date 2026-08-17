@@ -1,5 +1,124 @@
 # 项目更新日志
 
+## 2026-08-14 设备凭证自动签发、轮换与量产安全收口
+
+> 当前状态：本地代码已完成并通过回归测试，连接 8123 的小程序联调构建已生成；
+> 正式构建会在未配置真实 HTTPS 域名时主动失败。8123
+> 服务器尚未自动部署，也未对正式 `baby_bed_sql` 执行本轮四表迁移。上线需按
+> `DEVICE_CREDENTIALS_DEPLOYMENT_BAOTA.md` 先备份、迁移、灰度，再关闭旧凭证回退。
+
+### 需求与结果
+
+- 解决硬件只能依赖管理员手工生成 Token、后续批量设备无法自行领取凭证的问题。
+- 每台设备出厂拥有独立 `device_sn`、硬件激活码和家长认领码；数据库只保存
+  绑定设备和用途的 HMAC-SHA256 摘要。
+- 新增首次激活、确认、状态、轮换、恢复、家长认领、恢复码、状态查询和吊销接口。
+- 新 Token 先进入 `pending`，设备安全落盘后才确认生效；网络重试使用稳定
+  `client_request_id`，同一次请求可以重新得到相同 Token，服务端无需保存明文。
+- 正常轮换确认后旧 Token 进入默认 300 秒宽限；恢复确认后旧 Token 立即撤销。
+- 激活、认领和恢复增加失败计数、临时锁定、Redis 原子限流、`Retry-After`
+  以及不包含秘密原文的审计日志。
+- 新增显式 `DEVICE_CREDENTIAL_MIGRATION_MODE`，支持旧设备分批升级；严格上线
+  检查会阻止迁移模式、匿名注册或旧 Token 回退被误带入最终生产配置。
+- 心跳、工作模式、音色、传感器、旧状态、系统上报、视频上传/分析和互动播放
+  已接入同一设备鉴权；已认证设备不能给其他宝宝写数据。
+- 视频列表、详情、修改和删除改为家长 JWT + 家庭设备权限；视频和封面使用绑定
+  类型、文件名及过期时间的短期签名 URL，阻止越权访问、路径穿越和链接长期泄露。
+- 视频上传增加 100 MiB 可配置上限、分块写入、MIME 安全扩展名和文件/数据库
+  一致性清理；分析接口只能处理当前设备已登记的视频，不再接受任意文件地址。
+- 修正家长端视频列表类型与后端 `list + total` 响应的契约漂移，并删除无人使用且
+  不符合新鉴权边界的旧 JSON 上传/无签名视频流封装。
+- 新增 `build:mp-weixin:test` 与 `.env.test`，当前联调包明确连接 8123；正式构建在
+  Vite 配置阶段强制要求真实 HTTPS API/音色域名，避免构建成功后误连占位地址。
+
+### 家长端更新
+
+- 设备列表把“只输入 SN 绑定”升级为“SN + 独立认领码”，不再允许新设备绕过
+  出厂所有权验证。
+- 设备详情新增安全状态卡片，可查看未初始化、待确认、旧版、正常或已撤销状态。
+- 家庭管理员可生成只显示一次的恢复码，并可撤销单台设备访问；敏感值关闭弹窗后
+  立即从页面状态清除。
+- 统一前端 `ApiError` 读取后端稳定 `error_code`，为认领冲突、凭证锁定和
+  服务暂不可用提供可理解的中文提示。
+- 主要操作保留图标和文字，点击区域不少于 88rpx，沿用现有家长端视觉系统。
+
+### 后端新增文件
+
+| 文件 | 内容 |
+|---|---|
+| `app/models/device_credential.py` | 出厂凭证、版本化 Token、恢复码和审计模型 |
+| `app/schemas/device_credential.py` | 激活、确认、轮换、恢复、认领和吊销请求校验 |
+| `app/services/device_credential_service.py` | 完整凭证状态机、事务、幂等、轮换与恢复 |
+| `app/api/v1/device_credentials.py` | 硬件和家长端凭证 API |
+| `app/api/hardware_auth.py` | 灰度感知的统一硬件鉴权与宝宝绑定隔离 |
+| `migrations/add_device_credentials.sql` | 四张凭证表、唯一索引和设备外键 |
+| `scripts/provision_device_factory_credentials.py` | 单台/批量出厂凭证签发与 0600 CSV |
+| `tests/test_device_credentials.py` | 凭证生命周期、锁定、启动落盘和硬件隔离测试 |
+
+### 后端修改文件
+
+| 文件组 | 内容 |
+|---|---|
+| `config.py`、`.env.example` | 凭证、灰度、CORS、文档和生产启动安全校验 |
+| `main.py`、`app/core/exceptions.py` | 稳定错误码、校验错误脱敏和 500 信息隐藏 |
+| `app/core/device_auth.py`、`rate_limit.py` | 用途绑定 HMAC、版本 Token 和 Redis 原子限流 |
+| `app/api/v1/router.py`、`device.py` | 注册凭证路由、关闭匿名注册、认领码绑定 |
+| `hardware.py`、`sensor.py`、`status.py`、`system.py`、`video.py` | 统一硬件鉴权与设备/宝宝一致性 |
+| `app/services/interaction_service.py` | 新旧 Token 灰度认证和新版 Token 播放初始化判断 |
+| `scripts/check_interaction_readiness.py` | 只读检查表、字段、索引、摘要、重复 Token 和安全开关 |
+| `.gitignore` | 禁止凭证 CSV、模拟器 Token 和本地安全状态进入 Git |
+
+### 小程序修改文件
+
+| 文件 | 内容 |
+|---|---|
+| `src/api/config.ts` | 新增认领、凭证状态、恢复码和吊销路径 |
+| `src/api/device.ts` | 新增设备凭证类型和家长操作函数 |
+| `src/api/request.ts` | 保留后端 `data.error_code` 与附加数据 |
+| `src/api/request.test.ts` | 覆盖稳定错误码和网络错误分类 |
+| `src/api/video.ts`、`src/pages/video/index.vue` | 对齐签名媒体地址与 `list + total` 响应，移除旧硬件封装 |
+| `src/pages/device/list.vue` | 新设备使用认领码绑定及错误引导 |
+| `src/pages/device/detail.vue` | 安全状态、一次性恢复码和撤销访问 |
+| `vite.config.ts`、`.env.test`、`package.json` | 8123 联调构建与正式 HTTPS 构建门禁 |
+
+### 硬件与部署交付
+
+- `scripts/simulate_interaction_hardware.py` 支持首次自动激活、确认、以
+  `0600` 权限原子保存 Token、重启复用、轮询、下载校验和播放状态回报。
+- `HARDWARE_API_HANDOFF.md` 已更新为实际接口、请求字段、状态机、错误处理和
+  所有硬件私有接口的 `X-Device-Token` 规则。
+- `DEVICE_CREDENTIALS_IMPLEMENTATION_AND_PROJECT_FLOW.md` 已从方案稿更新为
+  实际代码结构和完整项目运行流程。
+- 新增 `DEVICE_CREDENTIALS_DEPLOYMENT_BAOTA.md`，包含宝塔、原数据库迁移、
+  HTTPS/Redis、灰度切换、严格检查、联调、正式收口和回滚。
+
+### 验证结果
+
+| 检查项 | 结果 |
+|---|---|
+| 后端完整测试 | 49 passed、1 skipped，另有 3 个子测试通过；skipped 为需独立 `_test` MySQL 的并发测试 |
+| 后端语法检查 | `python -m compileall -q app scripts tests` 通过 |
+| 设备凭证专项测试 | 6 passed |
+| 视频隐私安全专项 | 未登录访问、签名绑定、路径穿越、扩展名和 OpenAPI 参数测试通过 |
+| 前端单元测试 | 2 个测试文件、6 项通过 |
+| TypeScript 类型检查 | 通过 |
+| 前端顶层依赖树 | `npm ls --depth=0` 通过，无缺失依赖 |
+| 微信小程序 8123 联调构建 | `npm run build:mp-weixin:test` 通过，产物为 `dist/build/mp-weixin` |
+| 正式构建安全门禁 | 缺少真实 HTTPS API/音色域名时按设计失败，防止发布占位配置 |
+| 已知警告 | 1 条 Starlette/httpx 测试依赖弃用警告；现有 uView/Sass 弃用警告 |
+
+### 上线边界
+
+- 本轮没有自动修改远端数据库、宝塔项目环境变量或真实硬件。
+- 不能把当前 `http://223.247.96.246:8123` 用于量产凭证传输；正式环境必须 HTTPS。
+- `DEVICE_CREDENTIAL_PEPPER` 只能生成一次并安全备份，运行中不可随意更换。
+- 正式收口前必须运行
+  `check_interaction_readiness.py --strict --require-device-credentials` 并处理所有错误。
+- 本机 npm 镜像不提供漏洞审计 API，npm 官方源在当前网络超时；正式发布流水线必须
+  在可访问官方安全公告的网络中补跑 `npm audit --omit=dev --audit-level=high`。
+- 上线检查会验证宝宝唯一设备和凭证幂等索引的 UNIQUE 属性，避免同名普通索引
+  掩盖并发认领/签发风险。
+
 ## 2026-08-11 温馨时刻真机下载与分享交付包合并
 
 > 当前状态：已审查并按推荐策略合并外部“温馨时刻真机下载显示”交付包。温馨时刻的真实数据、图片缓存、保存相册和公开分享能力已接入；当前小程序 AppID、8123 接口地址、互动播放和 EgoLife 配置均保留，未被交付包共享配置覆盖。
@@ -1117,3 +1236,42 @@ is_admin   TINYINT(1) NOT NULL DEFAULT 0
 - 后端接口与数据库联调：通过。
 - 小程序管理员设置前端流程：通过。
 - 本次修改和文档只保存在本地，尚未提交或推送 GitHub。
+
+## 十、2026-08-14 前端可靠性与家长端体验收口
+
+### 1. 互动内容页
+
+- `src/pages/content/index.vue`：接入服务器内容库、真实播放会话、设备在线状态和进度；加入多宝宝切换、目标设备、收藏、最近/常播、暂停、继续、停止和 15/30/60 分钟定时停止。
+- 将轮询改为请求完成后的单次 `setTimeout`，禁止重叠请求，网络失败按 2/4/8/15 秒退避，切宝宝或离开页面后旧响应不能覆盖当前页面。
+- 修复暂停按钮显示英文图标名、停止后卡死、请求失败显示“暂无记录”和双击重复请求。
+- 播放器与内容卡使用明确中文状态；设备离线时显示“等待连接”，不假装硬件已经播放。
+- 收藏、分类、定时、停止、关闭等主要操作扩大到约 44px 触控热区。
+- 进度动画由 `width` 改为 `transform`，场景提醒去除弹跳动效，减少低端设备布局抖动。
+
+### 2. 监控、事件和全局轮询
+
+- `src/App.vue`：全局危险状态检查覆盖家庭全部已绑定设备，改为无重叠递归轮询，并防止页面隐藏后的旧请求弹出提醒。
+- `src/pages/index/index.vue`、`src/pages/monitor/index.vue`：按当前宝宝选择设备，防止固定取第一台设备；请求完成后再安排下一次刷新。
+- `src/api/monitor.ts`、`src/pages/monitor/events.vue`、`src/pages/monitor/detail.vue`：事件详情和确认携带 `source_table`，用 `source_ref` 区分不同数据库表中的相同数字 ID；纯状态日志不显示错误的确认入口。
+- `src/pages/scene/index.vue`：停止自动生成随机检测结果；“模拟/高危”明确标注为界面联调，不代表设备检测或硬件控制。
+
+### 3. 登录、错误和构建安全
+
+- `src/api/request.ts`、`src/api/request.test.ts`：统一 HTTP 错误类型，保留状态码与后端 `error_code`，区分可重试网络错误、409 配置错误和 501 未实现能力。
+- `src/pages/login/login.vue`、`forgot-password.vue`、`src/pages/my/account-security.vue`：统一密码最小长度、验证码错误、修改密码后退出登录和真实失败提示。
+- `src/api/config.ts`、`vite.config.ts`、`.env.example`、`.env.test`：测试包连接 8123；正式构建必须显式配置真实 HTTPS API/语音域名，避免误发布测试 IP。
+- `src/pages/milestone/report.vue`：报告提交失败时不再显示成功。
+
+### 4. 验证结果
+
+- `npm run typecheck`：通过。
+- `npm test -- --run`：2 个测试文件、6 项测试全部通过。
+- `npm run build:mp-weixin:test`：通过，产物为 `dist/build/mp-weixin`。
+- 构建产物确认包含 `http://223.247.96.246:8123/api/v1`，且播放器不再包含 `stop-circle` 英文显示文本。
+- 界面审计发现的布局动画和弹跳动效已修复；现有 Sass/uView `@import` 弃用警告不影响本次构建。
+
+### 5. 已知依赖风险
+
+- npm 官方审计报告 33 个传递依赖问题：13 高、9 中、11 低，主要由 UniApp/DCloud 编译链中的 Babel、PostCSS、esbuild、ws、Jimp 等引入。
+- 官方完整自动修复会把 DCloud 包改成不兼容版本，本轮没有执行 `npm audit fix --force`。
+- 后续应建立独立升级分支，统一升级 UniApp/DCloud 工具链，再重新执行类型检查、单测、微信构建和真机回归。

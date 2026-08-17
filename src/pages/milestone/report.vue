@@ -286,9 +286,9 @@ async function generateReport() {
     } else {
       uni.showToast({ title: '已提交生成任务', icon: 'none' })
     }
-  } catch {
-    await new Promise(resolve => setTimeout(resolve, 1800))
-    uni.showToast({ title: '已提交生成任务', icon: 'none' })
+  } catch (error) {
+    console.warn('[report] 成长报告生成失败', error)
+    uni.showToast({ title: '生成失败，请检查网络后重试', icon: 'none' })
   } finally {
     clearInterval(timer)
     generating.value = false

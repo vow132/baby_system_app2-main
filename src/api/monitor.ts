@@ -59,6 +59,10 @@ export interface MonitoringEvent {
   gif_url: string | null
   remark: string | null
   created_at: string | null
+  event_type?: string | null
+  source_table?: 'monitoring_events' | 'baby_status_log' | 'cry_event' | 'danger_event'
+  source_ref?: string
+  can_confirm?: boolean
 }
 
 // 场景分类结果（对齐后端 SceneClassifyResponse）
@@ -212,16 +216,22 @@ export function getEvents(params?: {
  * 获取事件详情
  * GET /api/v1/sensor/events/{event_id}
  */
-export function getEventDetail(eventId: number) {
-  return get<MonitoringEvent>(API.SENSOR.EVENT_DETAIL(eventId))
+export function getEventDetail(eventId: number, sourceTable = 'monitoring_events') {
+  return get<MonitoringEvent>(withQuery(API.SENSOR.EVENT_DETAIL(eventId), {
+    source_table: sourceTable,
+  }))
 }
 
 /**
  * 确认事件
  * POST /api/v1/sensor/events/confirm
  */
-export function confirmEvent(data: { event_id: number; parent_handled?: number }) {
-  return post(API.SENSOR.EVENT_CONFIRM, { event_id: data.event_id, parent_handled: data.parent_handled ?? 1 })
+export function confirmEvent(data: { event_id: number; parent_handled?: number; source_table?: string }) {
+  return post(API.SENSOR.EVENT_CONFIRM, {
+    event_id: data.event_id,
+    parent_handled: data.parent_handled ?? 1,
+    source_table: data.source_table || 'monitoring_events',
+  })
 }
 
 // ========== 传感器接口（小程序端） ==========

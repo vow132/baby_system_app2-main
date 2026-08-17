@@ -144,12 +144,14 @@
           <text class="player-kicker">正在给 {{ currentBaby?.name }} 播放</text>
           <text class="player-title">{{ playingItem.title }}</text>
         </view>
-        <u-icon name="close" size="20" color="#888" v-if="isTerminalSession" @click="dismissPlayer" />
+        <view class="close-btn" v-if="isTerminalSession" @click="dismissPlayer">
+          <u-icon name="close" size="20" color="#888" />
+        </view>
       </view>
       <text class="player-status" :class="{ error: currentSession.actual_state === 'failed' }">
         {{ playerStatusText }}
       </text>
-      <view class="progress-track"><view class="progress-fill" :style="{ width: `${playerProgress}%` }" /></view>
+      <view class="progress-track"><view class="progress-fill" :style="{ transform: `scaleX(${playerProgress / 100})` }" /></view>
       <view class="progress-time">
         <text>{{ formatSeconds(currentSession.position_sec) }}</text>
         <text>{{ formatSeconds(currentSession.duration_sec) }}</text>
@@ -252,10 +254,11 @@ const statusError = ref('')
 const configurationError = ref(false)
 const consecutivePollErrors = ref(0)
 let pollTimer: ReturnType<typeof setTimeout> | null = null
-let pollInFlight = false
+let pollInFlightGeneration: number | null = null
 let statusPollingBlocked = false
 let pageActive = false
 let pageGeneration = 0
+let playbackEpoch = 0
 
 const quickTabs = [
   { label: '全部', value: 'all' as QuickFilter, icon: 'grid' },
@@ -365,12 +368,14 @@ onUnload(deactivatePage)
 function deactivatePage() {
   pageActive = false
   pageGeneration += 1
+  playbackEpoch += 1
   stopPolling()
 }
 
 async function refreshPage() {
   stopPolling()
   const generation = ++pageGeneration
+  playbackEpoch += 1
   statusError.value = ''
   configurationError.value = false
   statusPollingBlocked = false
@@ -460,18 +465,23 @@ async function loadInteractionHistory(generation: number) {
 
 async function loadPlaybackStatus(generation: number) {
   const baby = currentBaby.value
-  if (!baby || pollInFlight || generation !== pageGeneration) return
-  pollInFlight = true
+  if (!baby || pollInFlightGeneration === generation || generation !== pageGeneration) return
+  const requestEpoch = playbackEpoch
+  pollInFlightGeneration = generation
   try {
     const res = await getInteractionPlaybackStatus(baby.id)
-    if (generation !== pageGeneration || baby.id !== currentBaby.value?.id) return
+    if (
+      generation !== pageGeneration
+      || requestEpoch !== playbackEpoch
+      || baby.id !== currentBaby.value?.id
+    ) return
     statusError.value = ''
     configurationError.value = false
     statusPollingBlocked = false
     consecutivePollErrors.value = 0
     applySession(res.data?.session || null)
   } catch (error: unknown) {
-    if (generation !== pageGeneration) return
+    if (generation !== pageGeneration || requestEpoch !== playbackEpoch) return
     const statusCode = getErrorStatusCode(error)
     const retryable = isRetryablePlaybackError(error)
     statusError.value = statusCode === 404
@@ -481,9 +491,10 @@ async function loadPlaybackStatus(generation: number) {
     statusPollingBlocked = !retryable
     consecutivePollErrors.value = retryable ? consecutivePollErrors.value + 1 : 0
   } finally {
-    pollInFlight = false
+    if (pollInFlightGeneration === generation) pollInFlightGeneration = null
     if (
       generation === pageGeneration
+      && requestEpoch === playbackEpoch
       && pageActive
       && !configurationError.value
       && !statusPollingBlocked
@@ -499,7 +510,7 @@ function getErrorStatusCode(error: unknown): number {
 
 function isRetryablePlaybackError(error: unknown): boolean {
   const statusCode = getErrorStatusCode(error)
-  return statusCode === 0 || statusCode === 408 || statusCode === 429 || statusCode >= 500
+  return statusCode === 0 || statusCode === 408 || statusCode === 429 || (statusCode >= 500 && statusCode !== 501)
 }
 
 function scheduleNextPoll(generation: number) {
@@ -533,6 +544,7 @@ async function sendControl(action: PlaybackAction, item?: ContentItem) {
   if (!baby || controlling.value) return
   controlling.value = true
   const generation = pageGeneration
+  const controlEpoch = ++playbackEpoch
   try {
     const res = await controlInteractionPlayback({
       baby_id: baby.id,
@@ -541,7 +553,11 @@ async function sendControl(action: PlaybackAction, item?: ContentItem) {
       session_id: action === 'play' ? undefined : currentSession.value?.session_id,
       client_request_id: createRequestId(action),
     })
-    if (generation !== pageGeneration || baby.id !== currentBaby.value?.id) return
+    if (
+      generation !== pageGeneration
+      || controlEpoch !== playbackEpoch
+      || baby.id !== currentBaby.value?.id
+    ) return
     applySession(res.data)
     statusError.value = ''
     configurationError.value = false
@@ -560,6 +576,12 @@ async function sendControl(action: PlaybackAction, item?: ContentItem) {
     uni.showToast({ title: error?.message || '设备控制失败', icon: 'none', duration: 2500 })
   } finally {
     controlling.value = false
+    if (
+      generation === pageGeneration
+      && controlEpoch === playbackEpoch
+      && pageActive
+      && !statusPollingBlocked
+    ) scheduleNextPoll(generation)
   }
 }
 
@@ -585,12 +607,19 @@ async function setTimer(minutes: 15 | 30 | 60 | null) {
   const session = currentSession.value
   if (!baby || !session || controlling.value) return
   controlling.value = true
+  const generation = pageGeneration
+  const controlEpoch = ++playbackEpoch
   try {
     const res = await setInteractionPlaybackTimer({
       baby_id: baby.id,
       session_id: session.session_id,
       timer_minutes: minutes,
     })
+    if (
+      generation !== pageGeneration
+      || controlEpoch !== playbackEpoch
+      || baby.id !== currentBaby.value?.id
+    ) return
     applySession(res.data)
     uni.showToast({
       title: minutes ? `将在 ${minutes} 分钟后停止` : '已取消定时停止',
@@ -600,6 +629,12 @@ async function setTimer(minutes: 15 | 30 | 60 | null) {
     uni.showToast({ title: error?.message || '定时设置失败', icon: 'none' })
   } finally {
     controlling.value = false
+    if (
+      generation === pageGeneration
+      && controlEpoch === playbackEpoch
+      && pageActive
+      && !statusPollingBlocked
+    ) scheduleNextPoll(generation)
   }
 }
 
@@ -799,7 +834,7 @@ function formatHistoryTime(value?: string | null) {
 .baby-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 64rpx;
+  min-height: 88rpx;
   padding: 0 26rpx;
   margin-right: 12rpx;
   color: #777;
@@ -829,7 +864,7 @@ function formatHistoryTime(value?: string | null) {
   align-items: center;
   justify-content: center;
   gap: 7rpx;
-  min-height: 78rpx;
+  min-height: 88rpx;
   color: #777;
   border-radius: 16rpx;
   background: #fff;
@@ -840,7 +875,7 @@ function formatHistoryTime(value?: string | null) {
 .category-tab {
   display: inline-flex;
   align-items: center;
-  min-height: 60rpx;
+  min-height: 88rpx;
   padding: 0 22rpx;
   margin-right: 10rpx;
   color: #888;
@@ -887,13 +922,13 @@ function formatHistoryTime(value?: string | null) {
 .content-meta { display: flex; flex-wrap: wrap; gap: 9rpx; margin-top: 10rpx; color: #a3a6b2; font-size: 19rpx; }
 .meta-tag { padding: 2rpx 9rpx; color: #667eea; border-radius: 6rpx; background: #eef0ff; }
 .card-actions { display: flex; flex-direction: column; align-items: center; gap: 6rpx; margin-left: 12rpx; }
-.favorite-btn { display: flex; align-items: center; justify-content: center; width: 68rpx; height: 52rpx; }
+.favorite-btn { display: flex; align-items: center; justify-content: center; width: 88rpx; height: 88rpx; }
 .play-btn {
   display: flex;
   align-items: center;
   gap: 4rpx;
   min-width: 88rpx;
-  min-height: 52rpx;
+  min-height: 88rpx;
   color: #666;
   font-size: 20rpx;
 }
@@ -951,24 +986,25 @@ function formatHistoryTime(value?: string | null) {
   box-shadow: 0 10rpx 36rpx rgba(37,43,74,.18);
 }
 .player-title-row { display: flex; align-items: flex-start; justify-content: space-between; }
+.close-btn { display: flex; align-items: center; justify-content: center; width: 88rpx; height: 88rpx; margin: -20rpx -20rpx 0 0; }
 .player-kicker { display: block; color: #9a9dab; font-size: 20rpx; }
 .player-title { display: block; margin-top: 3rpx; color: #2f3446; font-size: 29rpx; font-weight: 700; }
 .player-status { display: block; margin-top: 7rpx; color: #667eea; font-size: 21rpx; }
 .player-status.error { color: #e85d5d; }
 .progress-track { overflow: hidden; height: 8rpx; margin-top: 16rpx; border-radius: 4rpx; background: #e9ebf3; }
-.progress-fill { height: 100%; border-radius: 4rpx; background: #667eea; transition: width .25s; }
+.progress-fill { width: 100%; height: 100%; border-radius: 4rpx; background: #667eea; transform-origin: left center; transition: transform .25s ease-out; }
 .progress-time { display: flex; justify-content: space-between; margin-top: 5rpx; color: #a4a7b2; font-size: 18rpx; }
 .timer-row { display: flex; align-items: center; gap: 8rpx; margin-top: 15rpx; overflow-x: auto; }
 .timer-label { flex: 1; min-width: 150rpx; color: #6f7383; font-size: 20rpx; }
 .timer-chip {
   flex-shrink: 0;
-  min-height: 54rpx;
+  min-height: 88rpx;
   padding: 0 14rpx;
   color: #667eea;
-  border-radius: 27rpx;
+  border-radius: 44rpx;
   background: #eef0ff;
   font-size: 19rpx;
-  line-height: 54rpx;
+  line-height: 88rpx;
 }
 .timer-chip.cancel { color: #888; background: #f1f2f5; }
 .player-actions { display: flex; gap: 14rpx; margin-top: 18rpx; }
